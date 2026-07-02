@@ -116,6 +116,12 @@ export interface RankedMemory {
   rankScore: number;
 }
 
+// Result returned by memory_retrieve MCP tool
+export interface RetrieveFilters {
+  tags?: string[];
+  types?: MemoryType[];
+}
+
 /** Result returned by memory_retrieve MCP tool */
 export interface RetrieveResult {
   /** Ordered list of top-K ranked memories */

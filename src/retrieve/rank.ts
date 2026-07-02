@@ -14,7 +14,7 @@
 import { embed } from "../embedding/embed.js";
 import { getVectorStore } from "../store/vector.js";
 import { getMetadataStore } from "../store/metadata.js";
-import type { RankedMemory, RetrieveResult, MemoryRecord } from "../types.js";
+import type { RankedMemory, RetrieveResult, MemoryRecord, RetrieveFilters } from "../types.js";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -36,7 +36,11 @@ export class Retriever {
    * @param limit  - Number of results to return (default: 5)
    * @returns RetrieveResult with ranked memories + context string
    */
-  async retrieve(query: string, limit: number = DEFAULT_LIMIT): Promise<RetrieveResult> {
+  async retrieve(
+    query: string,
+    limit: number = DEFAULT_LIMIT,
+    filters?: RetrieveFilters
+  ): Promise<RetrieveResult> {
     const vectorStore = getVectorStore();
     const metaStore = getMetadataStore();
 
@@ -44,7 +48,10 @@ export class Retriever {
     const queryEmbedding = await embed(query);
 
     // Step 2: Fetch more candidates than needed so we can rerank
-    const candidateCount = limit * RETRIEVAL_CANDIDATE_MULTIPLIER;
+    const hasFilters = filters && ((filters.tags && filters.tags.length > 0) || (filters.types && filters.types.length > 0));
+    const candidateCount = hasFilters
+      ? Math.max(limit * 10, 100)
+      : limit * RETRIEVAL_CANDIDATE_MULTIPLIER;
     const vectorResults = await vectorStore.query(queryEmbedding, candidateCount);
 
     if (vectorResults.length === 0) {
@@ -66,11 +73,28 @@ export class Retriever {
       similarityMap.set(vr.id, vr.similarity);
     }
 
-    // Step 4: Compute rank scores and filter out stale vector refs
+    // Step 4: Compute rank scores and filter out stale vector refs & non-matching filters
     const ranked: RankedMemory[] = [];
     for (const vr of vectorResults) {
       const meta = metaMap.get(vr.id);
       if (!meta) continue; // stale reference in Chroma
+
+      // Apply type filters
+      if (filters?.types && filters.types.length > 0) {
+        if (!filters.types.includes(meta.type)) {
+          continue;
+        }
+      }
+
+      // Apply tag filters (matches at least one tag case-insensitively)
+      if (filters?.tags && filters.tags.length > 0) {
+        const hasMatchingTag = filters.tags.some((t) =>
+          meta.tags.some((mt) => mt.toLowerCase() === t.toLowerCase())
+        );
+        if (!hasMatchingTag) {
+          continue;
+        }
+      }
 
       const similarity = vr.similarity;
       const rankScore = similarity * meta.decay_weight;

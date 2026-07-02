@@ -158,11 +158,17 @@ async function cmdSearch(args: ParsedArgs): Promise<void> {
   }
 
   const limit = parseInt((args.flags["limit"] as string | undefined) ?? "5", 10);
+  const tags = args.tags.length > 0 ? args.tags : undefined;
+  const types = args.flags["type"]
+    ? [args.flags["type"] as MemoryType]
+    : undefined;
 
   console.log(colorize(`\n🔍 Searching memories for: "${query}"`, "dim"));
+  if (tags) console.log(colorize(`   Filter tags: ${tags.join(", ")}`, "gray"));
+  if (types) console.log(colorize(`   Filter type: ${types.join(", ")}`, "gray"));
 
   const retriever = getRetriever();
-  const result = await retriever.retrieve(query, limit);
+  const result = await retriever.retrieve(query, limit, { tags, types });
 
   if (result.memories.length === 0) {
     console.log(colorize("\n  No memories found.\n", "yellow"));

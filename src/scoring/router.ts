@@ -72,7 +72,8 @@ export class MemoryRouter {
     score: ScoreResult,
     type: MemoryType,
     source: string,
-    tags: string[]
+    tags: string[],
+    fallbackReason?: string
   ): Promise<EvaluateResult> {
     const id = uuidv4();
     const now = Date.now();
@@ -105,7 +106,7 @@ export class MemoryRouter {
       action: "stored" as RouteAction,
       memoryId: id,
       score,
-      reason: `Score ${final_score.toFixed(3)} >= ${STORE_THRESHOLD} → stored as new memory`,
+      reason: fallbackReason ?? `Score ${score.final_score.toFixed(3)} >= ${STORE_THRESHOLD} → stored as new memory`,
     };
   }
 
@@ -132,7 +133,15 @@ export class MemoryRouter {
       (similar[0]?.similarity ?? 0) < MERGE_SIMILARITY_THRESHOLD
     ) {
       // No close enough existing memory → fall back to STORE
-      return this.store(content, score, type, source, tags);
+      const simVal = similar[0] ? similar[0].similarity.toFixed(3) : "N/A";
+      return this.store(
+        content,
+        score,
+        type,
+        source,
+        tags,
+        `Score ${score.final_score.toFixed(3)} is in compression range but no similar memory exists (max similarity: ${simVal}) → stored as new memory`
+      );
     }
 
     const existingId = similar[0]!.id;
@@ -140,7 +149,14 @@ export class MemoryRouter {
 
     if (!existing) {
       // Stale vector reference → store fresh
-      return this.store(content, score, type, source, tags);
+      return this.store(
+        content,
+        score,
+        type,
+        source,
+        tags,
+        `Score ${score.final_score.toFixed(3)} is in compression range but the matched memory has stale metadata → stored as new memory`
+      );
     }
 
     // Merge via LLM summarization

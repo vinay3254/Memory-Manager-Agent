@@ -127,11 +127,22 @@ server.tool(
       .optional()
       .default(5)
       .describe("Maximum number of memories to return"),
+    tags: z
+      .array(z.string())
+      .optional()
+      .describe("Filter results to memories containing at least one of these tags"),
+    types: z
+      .array(z.enum(["fact", "decision", "event", "summary"]))
+      .optional()
+      .describe("Filter results to memories matching any of these types"),
   },
-  async ({ query, limit }) => {
+  async ({ query, limit, tags, types }) => {
     try {
       const retriever = getRetriever();
-      const result = await retriever.retrieve(query, limit ?? 5);
+      const result = await retriever.retrieve(query, limit ?? 5, {
+        tags,
+        types: types as MemoryType[] | undefined,
+      });
 
       const output = {
         count: result.memories.length,

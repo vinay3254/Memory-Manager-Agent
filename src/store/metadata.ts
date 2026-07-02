@@ -1,98 +1,66 @@
 // ============================================================
 // src/store/metadata.ts
-// SQLite metadata store for all non-vector memory fields.
-// Uses better-sqlite3 (synchronous API) for reliability.
+// Pure TypeScript/JSON metadata store.
+// Replaces better-sqlite3 to run without native dependencies on Node 25.
 // ============================================================
 
-import Database from "better-sqlite3";
-import { mkdirSync } from "fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
 import { dirname } from "path";
 import type { MemoryRecord, MemoryType } from "../types.js";
 
-// ---------------------------------------------------------------------------
-// Row shape as stored in SQLite (flat, serialized arrays as JSON strings)
-// ---------------------------------------------------------------------------
-interface MemoryRow {
-  id: string;
-  content: string;
-  type: string;
-  source: string;
-  created_at: number;
-  last_accessed: number;
-  access_count: number;
-  decay_weight: number;
-  merged_from: string; // JSON array
-  tags: string;        // JSON array
+interface JSONStoreData {
+  memories: Record<string, Omit<MemoryRecord, "embedding">>;
+  counters: Record<string, number>;
 }
-
-function rowToRecord(row: MemoryRow): Omit<MemoryRecord, "embedding"> {
-  return {
-    id: row.id,
-    content: row.content,
-    type: row.type as MemoryType,
-    source: row.source,
-    created_at: row.created_at,
-    last_accessed: row.last_accessed,
-    access_count: row.access_count,
-    decay_weight: row.decay_weight,
-    merged_from: JSON.parse(row.merged_from) as string[],
-    tags: JSON.parse(row.tags) as string[],
-  };
-}
-
-// ---------------------------------------------------------------------------
-// MetadataStore
-// ---------------------------------------------------------------------------
 
 export class MetadataStore {
-  private db: Database.Database;
-
-  /** Discard counter — kept in memory (reset on restart) */
-  private discardCount = 0;
-  /** Compress counter — how many times COMPRESS action happened */
-  private compressCount = 0;
+  private dbPath: string;
+  private memories: Map<string, Omit<MemoryRecord, "embedding">> = new Map();
+  private counters: Map<string, number> = new Map();
 
   constructor(dbPath: string) {
-    mkdirSync(dirname(dbPath), { recursive: true });
-    this.db = new Database(dbPath);
+    // If the path ends in .db, convert it to .json for clarity
+    this.dbPath = dbPath.replace(/\.db$/, ".json");
+    mkdirSync(dirname(this.dbPath), { recursive: true });
     this.initialize();
   }
 
-  // -------------------------------------------------------------------------
-  // Schema
-  // -------------------------------------------------------------------------
-
   private initialize(): void {
-    this.db.exec(`
-      PRAGMA journal_mode = WAL;
-      PRAGMA foreign_keys = ON;
+    this.counters.set("discard_count", 0);
+    this.counters.set("compress_count", 0);
 
-      CREATE TABLE IF NOT EXISTS memories (
-        id            TEXT PRIMARY KEY,
-        content       TEXT NOT NULL,
-        type          TEXT NOT NULL CHECK(type IN ('fact','decision','event','summary')),
-        source        TEXT NOT NULL DEFAULT 'unknown',
-        created_at    INTEGER NOT NULL,
-        last_accessed INTEGER NOT NULL,
-        access_count  INTEGER NOT NULL DEFAULT 0,
-        decay_weight  REAL NOT NULL DEFAULT 1.0,
-        merged_from   TEXT NOT NULL DEFAULT '[]',
-        tags          TEXT NOT NULL DEFAULT '[]'
-      );
+    if (existsSync(this.dbPath)) {
+      try {
+        const raw = readFileSync(this.dbPath, "utf-8");
+        const data = JSON.parse(raw) as JSONStoreData;
+        if (data.memories) {
+          for (const [id, record] of Object.entries(data.memories)) {
+            this.memories.set(id, record);
+          }
+        }
+        if (data.counters) {
+          for (const [key, val] of Object.entries(data.counters)) {
+            this.counters.set(key, val);
+          }
+        }
+      } catch (err) {
+        process.stderr.write(`[MetadataStore] Warning: Failed to read store: ${String(err)}\n`);
+      }
+    } else {
+      this.save();
+    }
+  }
 
-      CREATE TABLE IF NOT EXISTS counters (
-        key   TEXT PRIMARY KEY,
-        value INTEGER NOT NULL DEFAULT 0
-      );
-
-      INSERT OR IGNORE INTO counters (key, value) VALUES
-        ('discard_count', 0),
-        ('compress_count', 0);
-
-      CREATE INDEX IF NOT EXISTS idx_decay ON memories(decay_weight);
-      CREATE INDEX IF NOT EXISTS idx_created ON memories(created_at);
-      CREATE INDEX IF NOT EXISTS idx_last_accessed ON memories(last_accessed);
-    `);
+  private save(): void {
+    const data: JSONStoreData = {
+      memories: Object.fromEntries(this.memories),
+      counters: Object.fromEntries(this.counters),
+    };
+    try {
+      writeFileSync(this.dbPath, JSON.stringify(data, null, 2), "utf-8");
+    } catch (err) {
+      process.stderr.write(`[MetadataStore] Error: Failed to write store: ${String(err)}\n`);
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -100,66 +68,33 @@ export class MetadataStore {
   // -------------------------------------------------------------------------
 
   insert(record: Omit<MemoryRecord, "embedding">): void {
-    const stmt = this.db.prepare(`
-      INSERT INTO memories
-        (id, content, type, source, created_at, last_accessed,
-         access_count, decay_weight, merged_from, tags)
-      VALUES
-        (@id, @content, @type, @source, @created_at, @last_accessed,
-         @access_count, @decay_weight, @merged_from, @tags)
-    `);
-    stmt.run({
-      ...record,
-      merged_from: JSON.stringify(record.merged_from),
-      tags: JSON.stringify(record.tags),
-    });
+    this.memories.set(record.id, { ...record });
+    this.save();
   }
 
   update(
     id: string,
     patch: Partial<Omit<MemoryRecord, "id" | "embedding">>
   ): void {
-    const current = this.getById(id);
+    const current = this.memories.get(id);
     if (!current) throw new Error(`Memory not found: ${id}`);
 
     const merged = { ...current, ...patch };
-    const stmt = this.db.prepare(`
-      UPDATE memories SET
-        content       = @content,
-        type          = @type,
-        source        = @source,
-        created_at    = @created_at,
-        last_accessed = @last_accessed,
-        access_count  = @access_count,
-        decay_weight  = @decay_weight,
-        merged_from   = @merged_from,
-        tags          = @tags
-      WHERE id = @id
-    `);
-    stmt.run({
-      id,
-      content: merged.content,
-      type: merged.type,
-      source: merged.source,
-      created_at: merged.created_at,
-      last_accessed: merged.last_accessed,
-      access_count: merged.access_count,
-      decay_weight: merged.decay_weight,
-      merged_from: JSON.stringify(merged.merged_from),
-      tags: JSON.stringify(merged.tags),
-    });
+    this.memories.set(id, merged);
+    this.save();
   }
 
   delete(id: string): void {
-    this.db.prepare("DELETE FROM memories WHERE id = ?").run(id);
+    this.memories.delete(id);
+    this.save();
   }
 
   deleteMany(ids: string[]): void {
     if (ids.length === 0) return;
-    const placeholders = ids.map(() => "?").join(",");
-    this.db
-      .prepare(`DELETE FROM memories WHERE id IN (${placeholders})`)
-      .run(...ids);
+    for (const id of ids) {
+      this.memories.delete(id);
+    }
+    this.save();
   }
 
   // -------------------------------------------------------------------------
@@ -167,26 +102,23 @@ export class MetadataStore {
   // -------------------------------------------------------------------------
 
   getById(id: string): Omit<MemoryRecord, "embedding"> | null {
-    const row = this.db
-      .prepare("SELECT * FROM memories WHERE id = ?")
-      .get(id) as MemoryRow | undefined;
-    return row ? rowToRecord(row) : null;
+    const mem = this.memories.get(id);
+    return mem ? { ...mem } : null;
   }
 
   getByIds(ids: string[]): Omit<MemoryRecord, "embedding">[] {
-    if (ids.length === 0) return [];
-    const placeholders = ids.map(() => "?").join(",");
-    const rows = this.db
-      .prepare(`SELECT * FROM memories WHERE id IN (${placeholders})`)
-      .all(...ids) as MemoryRow[];
-    return rows.map(rowToRecord);
+    const results: Omit<MemoryRecord, "embedding">[] = [];
+    for (const id of ids) {
+      const mem = this.memories.get(id);
+      if (mem) results.push({ ...mem });
+    }
+    return results;
   }
 
   getAll(): Omit<MemoryRecord, "embedding">[] {
-    const rows = this.db
-      .prepare("SELECT * FROM memories ORDER BY created_at DESC")
-      .all() as MemoryRow[];
-    return rows.map(rowToRecord);
+    return Array.from(this.memories.values())
+      .map(m => ({ ...m }))
+      .sort((a, b) => b.created_at - a.created_at);
   }
 
   /** Returns memories older than `ageDays` with decay_weight below threshold */
@@ -195,23 +127,17 @@ export class MetadataStore {
     ageDays: number
   ): Omit<MemoryRecord, "embedding">[] {
     const cutoff = Date.now() - ageDays * 24 * 60 * 60 * 1000;
-    const rows = this.db
-      .prepare(
-        `SELECT * FROM memories
-         WHERE decay_weight < ? AND created_at < ?`
-      )
-      .all(decayThreshold, cutoff) as MemoryRow[];
-    return rows.map(rowToRecord);
+    return Array.from(this.memories.values())
+      .filter(m => m.decay_weight < decayThreshold && m.created_at < cutoff)
+      .map(m => ({ ...m }));
   }
 
   /** Returns the N most recent memories (for recurrence calculation) */
   getRecent(limit: number): Omit<MemoryRecord, "embedding">[] {
-    const rows = this.db
-      .prepare(
-        "SELECT * FROM memories ORDER BY last_accessed DESC LIMIT ?"
-      )
-      .all(limit) as MemoryRow[];
-    return rows.map(rowToRecord);
+    return Array.from(this.memories.values())
+      .map(m => ({ ...m }))
+      .sort((a, b) => b.last_accessed - a.last_accessed)
+      .slice(0, limit);
   }
 
   // -------------------------------------------------------------------------
@@ -223,28 +149,29 @@ export class MetadataStore {
    * Resets decay_weight toward 1.0 using: new = old + (1-old)*0.3
    */
   bumpAccess(id: string): void {
-    const stmt = this.db.prepare(`
-      UPDATE memories
-      SET
-        last_accessed = ?,
-        access_count  = access_count + 1,
-        decay_weight  = MIN(1.0, decay_weight + (1.0 - decay_weight) * 0.3)
-      WHERE id = ?
-    `);
-    stmt.run(Date.now(), id);
+    const mem = this.memories.get(id);
+    if (mem) {
+      mem.last_accessed = Date.now();
+      mem.access_count += 1;
+      mem.decay_weight = Math.min(1.0, mem.decay_weight + (1.0 - mem.decay_weight) * 0.3);
+      this.save();
+    }
   }
 
   updateDecayWeight(id: string, newWeight: number): void {
-    this.db
-      .prepare("UPDATE memories SET decay_weight = ? WHERE id = ?")
-      .run(Math.max(0, Math.min(1, newWeight)), id);
+    const mem = this.memories.get(id);
+    if (mem) {
+      mem.decay_weight = Math.max(0, Math.min(1, newWeight));
+      this.save();
+    }
   }
 
   /** Apply daily decay to all memories: weight *= 0.97 */
   applyDailyDecay(): void {
-    this.db.exec(
-      "UPDATE memories SET decay_weight = MAX(0.0, decay_weight * 0.97)"
-    );
+    for (const mem of this.memories.values()) {
+      mem.decay_weight = Math.max(0.0, mem.decay_weight * 0.97);
+    }
+    this.save();
   }
 
   // -------------------------------------------------------------------------
@@ -252,26 +179,19 @@ export class MetadataStore {
   // -------------------------------------------------------------------------
 
   incrementDiscard(): void {
-    this.db
-      .prepare(
-        "UPDATE counters SET value = value + 1 WHERE key = 'discard_count'"
-      )
-      .run();
+    const val = this.counters.get("discard_count") ?? 0;
+    this.counters.set("discard_count", val + 1);
+    this.save();
   }
 
   incrementCompress(): void {
-    this.db
-      .prepare(
-        "UPDATE counters SET value = value + 1 WHERE key = 'compress_count'"
-      )
-      .run();
+    const val = this.counters.get("compress_count") ?? 0;
+    this.counters.set("compress_count", val + 1);
+    this.save();
   }
 
   getCounter(key: string): number {
-    const row = this.db
-      .prepare("SELECT value FROM counters WHERE key = ?")
-      .get(key) as { value: number } | undefined;
-    return row?.value ?? 0;
+    return this.counters.get(key) ?? 0;
   }
 
   // -------------------------------------------------------------------------
@@ -284,32 +204,36 @@ export class MetadataStore {
     oldestCreatedAt: number | null;
     newestCreatedAt: number | null;
   } {
-    const row = this.db
-      .prepare(
-        `SELECT
-           COUNT(*) as total,
-           AVG(decay_weight) as avg_decay,
-           MIN(created_at) as oldest,
-           MAX(created_at) as newest
-         FROM memories`
-      )
-      .get() as {
-      total: number;
-      avg_decay: number | null;
-      oldest: number | null;
-      newest: number | null;
-    };
+    const total = this.memories.size;
+    if (total === 0) {
+      return {
+        totalStored: 0,
+        averageDecayWeight: 0,
+        oldestCreatedAt: null,
+        newestCreatedAt: null,
+      };
+    }
+
+    let sumDecay = 0;
+    let oldest = Infinity;
+    let newest = -Infinity;
+
+    for (const mem of this.memories.values()) {
+      sumDecay += mem.decay_weight;
+      if (mem.created_at < oldest) oldest = mem.created_at;
+      if (mem.created_at > newest) newest = mem.created_at;
+    }
 
     return {
-      totalStored: row.total,
-      averageDecayWeight: row.avg_decay ?? 0,
-      oldestCreatedAt: row.oldest,
-      newestCreatedAt: row.newest,
+      totalStored: total,
+      averageDecayWeight: sumDecay / total,
+      oldestCreatedAt: oldest === Infinity ? null : oldest,
+      newestCreatedAt: newest === -Infinity ? null : newest,
     };
   }
 
   close(): void {
-    this.db.close();
+    // No-op for JSON store
   }
 }
 
