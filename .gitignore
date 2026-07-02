@@ -5,3 +5,5 @@ data/
 *.db
 *.log
 .cache/
+backup.json
+

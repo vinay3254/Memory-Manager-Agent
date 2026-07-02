@@ -144,8 +144,8 @@ npm run cli -- add "We decided to use PostgreSQL for the project" \
 # Search memories
 npm run cli -- search "typed programming languages"
 
-# Search with custom limit
-npm run cli -- search "database decisions" --limit 10
+# Search with filters (tags and type)
+npm run cli -- search "database decisions" --limit 10 --tag database --type decision
 
 # View statistics
 npm run cli -- stats
@@ -155,6 +155,18 @@ npm run cli -- decay
 
 # Force-compress all memories on a topic
 npm run cli -- compress "TypeScript"
+
+# Link two memories semantically (sourceId, targetId, relation)
+npm run cli -- link <sourceId> <targetId> contradicts
+
+# View all links for a memory ID
+npm run cli -- links <memoryId>
+
+# Export all database data to a backup file
+npm run cli -- export backup.json
+
+# Import and merge database data from a backup file
+npm run cli -- import backup.json
 ```
 
 ---
@@ -192,10 +204,15 @@ Scores a memory candidate and routes it to store/compress/discard.
 ```
 
 ### `memory_retrieve`
-Retrieves top-K memories ranked by `similarity × decay_weight`.
+Retrieves top-K memories ranked by `similarity × decay_weight`. Supports optional type and tag filters.
 
 ```json
-{ "query": "technology stack decisions", "limit": 5 }
+{
+  "query": "technology stack decisions",
+  "limit": 5,
+  "tags": ["database"],
+  "types": ["decision"]
+}
 ```
 
 ### `memory_compress_now`
@@ -210,6 +227,34 @@ Returns aggregate store statistics.
 
 ### `memory_decay_run`
 Manually triggers the daily decay pass.
+
+### `memory_link`
+Create a directional semantic relation link between two memories.
+
+```json
+{
+  "sourceId": "source-memory-uuid",
+  "targetId": "target-memory-uuid",
+  "relation": "contradicts"
+}
+```
+
+### `memory_get_links`
+Retrieve all incoming and outgoing linked memories for a specific memory ID.
+
+```json
+{ "id": "memory-uuid" }
+```
+
+### `memory_export`
+Exports all memories and links as a stringified JSON backup payload.
+
+### `memory_import`
+Imports and merges memories and links from a stringified JSON backup payload.
+
+```json
+{ "backupData": "{...}" }
+```
 
 ---
 

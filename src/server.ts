@@ -26,6 +26,7 @@ import { getSummarizer } from "./compress/summarize.js";
 import { runDecayPass, startDecayScheduler } from "./decay/scheduler.js";
 import { embed } from "./embedding/embed.js";
 import { v4 as uuidv4 } from "uuid";
+import { exportBackup, importBackup } from "./store/backup.js";
 import type { MemoryType, MemoryLink, LinkedMemory } from "./types.js";
 
 // ---------------------------------------------------------------------------
@@ -409,6 +410,57 @@ server.tool(
       const links = metaStore.getLinks(id);
       return {
         content: [{ type: "text", text: JSON.stringify(links, null, 2) }],
+      };
+    } catch (err) {
+      return {
+        content: [{ type: "text", text: `Error: ${String(err)}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Tool: memory_export
+// ---------------------------------------------------------------------------
+
+server.tool(
+  "memory_export",
+  "Export all memories and relationship links as a stringified JSON backup payload.",
+  {},
+  async () => {
+    try {
+      const backupStr = await exportBackup();
+      return {
+        content: [{ type: "text", text: backupStr }],
+      };
+    } catch (err) {
+      return {
+        content: [{ type: "text", text: `Error: ${String(err)}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Tool: memory_import
+// ---------------------------------------------------------------------------
+
+server.tool(
+  "memory_import",
+  "Import and merge memories and links from a stringified JSON backup payload.",
+  {
+    backupData: z.string().describe("The stringified JSON backup payload"),
+  },
+  async ({ backupData }) => {
+    try {
+      const stats = await importBackup(backupData);
+      return {
+        content: [{
+          type: "text",
+          text: `Successfully imported ${stats.importedMemories} memories and ${stats.importedLinks} relationship links.`,
+        }],
       };
     } catch (err) {
       return {

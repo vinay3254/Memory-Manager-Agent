@@ -294,6 +294,22 @@ export class MetadataStore {
     return result;
   }
 
+  getAllLinks(): MemoryLink[] {
+    return this.links.map(l => ({ ...l }));
+  }
+
+  importLinks(links: MemoryLink[]): void {
+    for (const link of links) {
+      const exists = this.links.some(
+        l => l.sourceId === link.sourceId && l.targetId === link.targetId && l.relation === link.relation
+      );
+      if (!exists && this.memories.has(link.sourceId) && this.memories.has(link.targetId)) {
+        this.links.push({ ...link });
+      }
+    }
+    this.save();
+  }
+
   close(): void {
     // No-op for JSON store
   }

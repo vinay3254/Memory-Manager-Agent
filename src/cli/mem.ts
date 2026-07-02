@@ -23,8 +23,9 @@ import { getVectorStore } from "../store/vector.js";
 import { runDecayPass } from "../decay/scheduler.js";
 import { getSummarizer } from "../compress/summarize.js";
 import { embed } from "../embedding/embed.js";
-import { statSync } from "fs";
+import { readFileSync, writeFileSync, statSync } from "fs";
 import { v4 as uuidv4 } from "uuid";
+import { exportBackup, importBackup } from "../store/backup.js";
 import type { MemoryType } from "../types.js";
 
 // ---------------------------------------------------------------------------
@@ -378,6 +379,47 @@ async function cmdLinks(args: ParsedArgs): Promise<void> {
   }
 }
 
+async function cmdExport(args: ParsedArgs): Promise<void> {
+  const filePath = args.positional[0];
+  if (!filePath) {
+    console.error(colorize("Error: provide a file path to save the backup. e.g. mem export backup.json", "red"));
+    process.exit(1);
+  }
+
+  console.log(colorize("⏳ Exporting memories and links...", "dim"));
+  try {
+    const backupStr = await exportBackup();
+    writeFileSync(filePath, backupStr, "utf-8");
+    console.log(colorize(`\n✅ Backup successfully saved to ${filePath}\n`, "green"));
+  } catch (err) {
+    console.error(colorize(`\n❌ Error: ${String(err)}\n`, "red"));
+    process.exit(1);
+  }
+}
+
+async function cmdImport(args: ParsedArgs): Promise<void> {
+  const filePath = args.positional[0];
+  if (!filePath) {
+    console.error(colorize("Error: provide a file path to load the backup from. e.g. mem import backup.json", "red"));
+    process.exit(1);
+  }
+
+  console.log(colorize(`⏳ Importing backup from ${filePath}...`, "dim"));
+  try {
+    const backupStr = readFileSync(filePath, "utf-8");
+    const stats = await importBackup(backupStr);
+    console.log(
+      colorize(
+        `\n✅ Successfully imported ${stats.importedMemories} memories and ${stats.importedLinks} relationship links!\n`,
+        "green"
+      )
+    );
+  } catch (err) {
+    console.error(colorize(`\n❌ Error: ${String(err)}\n`, "red"));
+    process.exit(1);
+  }
+}
+
 function printHelp(): void {
   console.log(colorize("\nUsage:", "bold"));
   console.log("  mem add <content> [--type fact|decision|event|summary]");
@@ -388,7 +430,9 @@ function printHelp(): void {
   console.log("  mem decay");
   console.log("  mem compress <topic>");
   console.log("  mem link <sourceId> <targetId> [relation]");
-  console.log("  mem links <memoryId>\n");
+  console.log("  mem links <memoryId>");
+  console.log("  mem export <file_path>");
+  console.log("  mem import <file_path>\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -421,6 +465,12 @@ async function main(): Promise<void> {
       break;
     case "links":
       await cmdLinks(args);
+      break;
+    case "export":
+      await cmdExport(args);
+      break;
+    case "import":
+      await cmdImport(args);
       break;
     default:
       if (args.command) {
