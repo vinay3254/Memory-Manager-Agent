@@ -26,7 +26,7 @@ import { getSummarizer } from "./compress/summarize.js";
 import { runDecayPass, startDecayScheduler } from "./decay/scheduler.js";
 import { embed } from "./embedding/embed.js";
 import { v4 as uuidv4 } from "uuid";
-import type { MemoryType } from "./types.js";
+import type { MemoryType, MemoryLink, LinkedMemory } from "./types.js";
 
 // ---------------------------------------------------------------------------
 // MCP Server setup
@@ -355,6 +355,60 @@ server.tool(
             ),
           },
         ],
+      };
+    } catch (err) {
+      return {
+        content: [{ type: "text", text: `Error: ${String(err)}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Tool: memory_link
+// ---------------------------------------------------------------------------
+
+server.tool(
+  "memory_link",
+  "Create a directional/semantic link between two memories (e.g. relates_to, contradicts, supersedes, details).",
+  {
+    sourceId: z.string().describe("The ID of the source memory"),
+    targetId: z.string().describe("The ID of the target memory"),
+    relation: z.string().describe("The relationship name, e.g. 'supersedes', 'relates_to', 'details'"),
+  },
+  async ({ sourceId, targetId, relation }) => {
+    try {
+      const metaStore = getMetadataStore();
+      metaStore.addLink(sourceId, targetId, relation);
+      return {
+        content: [{ type: "text", text: `Successfully linked ${sourceId} to ${targetId} as '${relation}'` }],
+      };
+    } catch (err) {
+      return {
+        content: [{ type: "text", text: `Error: ${String(err)}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Tool: memory_get_links
+// ---------------------------------------------------------------------------
+
+server.tool(
+  "memory_get_links",
+  "Retrieve all linked memories (incoming and outgoing) for a specific memory ID.",
+  {
+    id: z.string().describe("The ID of the memory to check links for"),
+  },
+  async ({ id }) => {
+    try {
+      const metaStore = getMetadataStore();
+      const links = metaStore.getLinks(id);
+      return {
+        content: [{ type: "text", text: JSON.stringify(links, null, 2) }],
       };
     } catch (err) {
       return {

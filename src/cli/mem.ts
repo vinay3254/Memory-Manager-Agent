@@ -330,15 +330,65 @@ async function cmdCompress(args: ParsedArgs): Promise<void> {
   console.log(`  ${archiveContent}\n`);
 }
 
+async function cmdLink(args: ParsedArgs): Promise<void> {
+  const sourceId = args.positional[0];
+  const targetId = args.positional[1];
+  const relation = args.positional[2] ?? "relates_to";
+
+  if (!sourceId || !targetId) {
+    console.error(colorize("Error: provide sourceId and targetId. e.g. mem link <sourceId> <targetId> [relation]", "red"));
+    process.exit(1);
+  }
+
+  const metaStore = getMetadataStore();
+  try {
+    metaStore.addLink(sourceId, targetId, relation);
+    console.log(colorize(`\n✅ Linked ${sourceId} to ${targetId} as '${relation}'\n`, "green"));
+  } catch (err) {
+    console.error(colorize(`\n❌ Error: ${String(err)}\n`, "red"));
+    process.exit(1);
+  }
+}
+
+async function cmdLinks(args: ParsedArgs): Promise<void> {
+  const id = args.positional[0];
+  if (!id) {
+    console.error(colorize("Error: provide a memory ID. e.g. mem links <id>", "red"));
+    process.exit(1);
+  }
+
+  const metaStore = getMetadataStore();
+  try {
+    const links = metaStore.getLinks(id);
+    if (links.length === 0) {
+      console.log(colorize(`\nNo links found for memory ${id}\n`, "yellow"));
+      return;
+    }
+    console.log(colorize(`\n🔗 Links for memory ${id}:\n`, "bold"));
+    for (const link of links) {
+      const dirText = link.direction === "outgoing" ? "→" : "←";
+      console.log(
+        `  ${colorize(dirText, "cyan")} ${colorize(`[${link.relation.toUpperCase()}]`, "blue")} ${link.memory.content} ${colorize(`(${link.memory.id})`, "gray")}`
+      );
+    }
+    console.log();
+  } catch (err) {
+    console.error(colorize(`\n❌ Error: ${String(err)}\n`, "red"));
+    process.exit(1);
+  }
+}
+
 function printHelp(): void {
   console.log(colorize("\nUsage:", "bold"));
   console.log("  mem add <content> [--type fact|decision|event|summary]");
   console.log("                    [--source <name>] [--context <ctx>]");
   console.log("                    [--tag <tag>] [--tag <tag>...]");
-  console.log("  mem search <query> [--limit <n>]");
+  console.log("  mem search <query> [--limit <n>] [--tag <tag>] [--type <type>]");
   console.log("  mem stats");
   console.log("  mem decay");
-  console.log("  mem compress <topic>\n");
+  console.log("  mem compress <topic>");
+  console.log("  mem link <sourceId> <targetId> [relation]");
+  console.log("  mem links <memoryId>\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -365,6 +415,12 @@ async function main(): Promise<void> {
       break;
     case "compress":
       await cmdCompress(args);
+      break;
+    case "link":
+      await cmdLink(args);
+      break;
+    case "links":
+      await cmdLinks(args);
       break;
     default:
       if (args.command) {

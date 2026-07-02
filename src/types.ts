@@ -168,3 +168,20 @@ export interface DecayRunResult {
   archived: number;
   archiveSummaries: string[];
 }
+
+// ------------------------------------------------------------
+// Linkage
+// ------------------------------------------------------------
+
+export interface MemoryLink {
+  sourceId: string;
+  targetId: string;
+  relation: string;
+}
+
+export interface LinkedMemory {
+  memory: Omit<MemoryRecord, "embedding">;
+  relation: string;
+  /** Direction of the relation: "outgoing" (source -> target) or "incoming" (target -> source) */
+  direction: "outgoing" | "incoming";
+}

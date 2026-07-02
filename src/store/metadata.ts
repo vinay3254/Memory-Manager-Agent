@@ -6,17 +6,19 @@
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
 import { dirname } from "path";
-import type { MemoryRecord, MemoryType } from "../types.js";
+import type { MemoryRecord, MemoryType, MemoryLink, LinkedMemory } from "../types.js";
 
 interface JSONStoreData {
   memories: Record<string, Omit<MemoryRecord, "embedding">>;
   counters: Record<string, number>;
+  links?: MemoryLink[];
 }
 
 export class MetadataStore {
   private dbPath: string;
   private memories: Map<string, Omit<MemoryRecord, "embedding">> = new Map();
   private counters: Map<string, number> = new Map();
+  private links: MemoryLink[] = [];
 
   constructor(dbPath: string) {
     // If the path ends in .db, convert it to .json for clarity
@@ -43,6 +45,9 @@ export class MetadataStore {
             this.counters.set(key, val);
           }
         }
+        if (data.links) {
+          this.links = data.links;
+        }
       } catch (err) {
         process.stderr.write(`[MetadataStore] Warning: Failed to read store: ${String(err)}\n`);
       }
@@ -55,6 +60,7 @@ export class MetadataStore {
     const data: JSONStoreData = {
       memories: Object.fromEntries(this.memories),
       counters: Object.fromEntries(this.counters),
+      links: this.links,
     };
     try {
       writeFileSync(this.dbPath, JSON.stringify(data, null, 2), "utf-8");
@@ -86,14 +92,17 @@ export class MetadataStore {
 
   delete(id: string): void {
     this.memories.delete(id);
+    this.links = this.links.filter(l => l.sourceId !== id && l.targetId !== id);
     this.save();
   }
 
   deleteMany(ids: string[]): void {
     if (ids.length === 0) return;
+    const idSet = new Set(ids);
     for (const id of ids) {
       this.memories.delete(id);
     }
+    this.links = this.links.filter(l => !idSet.has(l.sourceId) && !idSet.has(l.targetId));
     this.save();
   }
 
@@ -230,6 +239,59 @@ export class MetadataStore {
       oldestCreatedAt: oldest === Infinity ? null : oldest,
       newestCreatedAt: newest === -Infinity ? null : newest,
     };
+  }
+
+  addLink(sourceId: string, targetId: string, relation: string): void {
+    if (!this.memories.has(sourceId)) {
+      throw new Error(`Source memory not found: ${sourceId}`);
+    }
+    if (!this.memories.has(targetId)) {
+      throw new Error(`Target memory not found: ${targetId}`);
+    }
+    // Check if link already exists
+    const exists = this.links.some(
+      l => l.sourceId === sourceId && l.targetId === targetId && l.relation === relation
+    );
+    if (!exists) {
+      this.links.push({ sourceId, targetId, relation });
+      this.save();
+    }
+  }
+
+  removeLink(sourceId: string, targetId: string, relation: string): void {
+    const lenBefore = this.links.length;
+    this.links = this.links.filter(
+      l => !(l.sourceId === sourceId && l.targetId === targetId && l.relation === relation)
+    );
+    if (this.links.length !== lenBefore) {
+      this.save();
+    }
+  }
+
+  getLinks(id: string): LinkedMemory[] {
+    const result: LinkedMemory[] = [];
+    for (const link of this.links) {
+      if (link.sourceId === id) {
+        const target = this.memories.get(link.targetId);
+        if (target) {
+          result.push({
+            memory: { ...target },
+            relation: link.relation,
+            direction: "outgoing",
+          });
+        }
+      } else if (link.targetId === id) {
+        const source = this.memories.get(link.sourceId);
+        if (source) {
+          result.push({
+            memory: { ...source },
+            relation: link.relation,
+            direction: "incoming",
+          });
+        }
+      }
+    }
+    return result;
   }
 
   close(): void {
