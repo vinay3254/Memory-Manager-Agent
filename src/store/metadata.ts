@@ -331,6 +331,32 @@ export class MetadataStore {
     return stats;
   }
 
+  bulkAddTag(ids: string[], tag: string): number {
+    let count = 0;
+    for (const id of ids) {
+      const mem = this.memories.get(id);
+      if (mem && !mem.tags.includes(tag)) {
+        mem.tags.push(tag);
+        count++;
+      }
+    }
+    if (count > 0) this.save();
+    return count;
+  }
+
+  bulkRemoveTag(ids: string[], tag: string): number {
+    let count = 0;
+    for (const id of ids) {
+      const mem = this.memories.get(id);
+      if (mem && mem.tags.includes(tag)) {
+        mem.tags = mem.tags.filter(t => t !== tag);
+        count++;
+      }
+    }
+    if (count > 0) this.save();
+    return count;
+  }
+
   close(): void {
     // No-op for JSON store
   }

@@ -521,6 +521,45 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
+// Tool: memory_bulk_tag
+// ---------------------------------------------------------------------------
+
+server.tool(
+  "memory_bulk_tag",
+  "Add or remove a tag from multiple memories that match a semantic search query.",
+  {
+    tag: z.string().describe("The tag name to add or remove"),
+    query: z.string().describe("A semantic search query to select matching memories"),
+    action: z.enum(["add", "remove"]).default("add").describe("Whether to add or remove the tag"),
+  },
+  async ({ tag, query, action }) => {
+    try {
+      const retriever = getRetriever();
+      const metaStore = getMetadataStore();
+
+      const searchResult = await retriever.retrieve(query, 20);
+      const ids = searchResult.memories.map(m => m.memory.id);
+
+      let count = 0;
+      if (action === "add") {
+        count = metaStore.bulkAddTag(ids, tag);
+      } else {
+        count = metaStore.bulkRemoveTag(ids, tag);
+      }
+
+      return {
+        content: [{ type: "text", text: `Successfully ${action === "add" ? "added" : "removed"} tag '#${tag}' ${action === "add" ? "to" : "from"} ${count} memories.` }],
+      };
+    } catch (err) {
+      return {
+        content: [{ type: "text", text: `Error: ${String(err)}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
 // Main — connect transport and start cron
 // ---------------------------------------------------------------------------
 

@@ -613,6 +613,56 @@ async function cmdHistory(args: ParsedArgs): Promise<void> {
   console.log();
 }
 
+async function cmdTag(args: ParsedArgs): Promise<void> {
+  const tag = args.positional[0];
+  const query = args.positional[1];
+
+  if (!tag || !query) {
+    console.error(colorize("Error: provide a tag and search query. e.g. mem tag <tag_name> <search_query>", "red"));
+    process.exit(1);
+  }
+
+  console.log(colorize(`⏳ Bulk tagging memories containing "${query}" with #${tag}...`, "dim"));
+  try {
+    const retriever = getRetriever();
+    const metaStore = getMetadataStore();
+
+    const searchResult = await retriever.retrieve(query, 20);
+    const ids = searchResult.memories.map(m => m.memory.id);
+
+    const count = metaStore.bulkAddTag(ids, tag);
+    console.log(colorize(`\n✅ Successfully added tag '#${tag}' to ${count} memories!\n`, "green"));
+  } catch (err) {
+    console.error(colorize(`\n❌ Error: ${String(err)}\n`, "red"));
+    process.exit(1);
+  }
+}
+
+async function cmdUntag(args: ParsedArgs): Promise<void> {
+  const tag = args.positional[0];
+  const query = args.positional[1];
+
+  if (!tag || !query) {
+    console.error(colorize("Error: provide a tag and search query. e.g. mem untag <tag_name> <search_query>", "red"));
+    process.exit(1);
+  }
+
+  console.log(colorize(`⏳ Bulk untagging memories containing "${query}" with #${tag}...`, "dim"));
+  try {
+    const retriever = getRetriever();
+    const metaStore = getMetadataStore();
+
+    const searchResult = await retriever.retrieve(query, 20);
+    const ids = searchResult.memories.map(m => m.memory.id);
+
+    const count = metaStore.bulkRemoveTag(ids, tag);
+    console.log(colorize(`\n✅ Successfully removed tag '#${tag}' from ${count} memories!\n`, "green"));
+  } catch (err) {
+    console.error(colorize(`\n❌ Error: ${String(err)}\n`, "red"));
+    process.exit(1);
+  }
+}
+
 function printHelp(): void {
   console.log(colorize("\nUsage:", "bold"));
   console.log("  mem add <content> [--type fact|decision|event|summary]");
@@ -628,7 +678,9 @@ function printHelp(): void {
   console.log("  mem export <file_path>");
   console.log("  mem import <file_path>");
   console.log("  mem chat");
-  console.log("  mem history <memoryId>\n");
+  console.log("  mem history <memoryId>");
+  console.log("  mem tag <tag_name> <search_query>");
+  console.log("  mem untag <tag_name> <search_query>\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -676,6 +728,12 @@ async function main(): Promise<void> {
       break;
     case "history":
       await cmdHistory(args);
+      break;
+    case "tag":
+      await cmdTag(args);
+      break;
+    case "untag":
+      await cmdUntag(args);
       break;
     default:
       if (args.command) {
