@@ -176,6 +176,24 @@ export class MetadataStore {
     }
   }
 
+  bumpAccessLinked(id: string): void {
+    const links = this.getLinks(id);
+    let count = 0;
+    for (const link of links) {
+      const linkedId = link.memory.id;
+      const mem = this.memories.get(linkedId);
+      if (mem) {
+        mem.decay_weight = Math.min(1.0, mem.decay_weight + (1.0 - mem.decay_weight) * 0.1);
+        if (!mem.access_history) mem.access_history = [];
+        mem.access_history.push({ timestamp: Date.now(), action: "spreading-activation" });
+        count++;
+      }
+    }
+    if (count > 0) {
+      this.save();
+    }
+  }
+
   updateDecayWeight(id: string, newWeight: number): void {
     const mem = this.memories.get(id);
     if (mem) {

@@ -115,6 +115,7 @@ export class Retriever {
     // Step 5: Bump access stats for retrieved memories (reinforcement)
     for (const result of topK) {
       metaStore.bumpAccess(result.memory.id);
+      metaStore.bumpAccessLinked(result.memory.id);
     }
 
     // Step 6: Format context-injectable string
