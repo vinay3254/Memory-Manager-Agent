@@ -6,6 +6,7 @@
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
 import { dirname } from "path";
+import { getConfigStore } from "./config.js";
 import type { MemoryRecord, MemoryType, MemoryLink, LinkedMemory } from "../types.js";
 
 interface JSONStoreData {
@@ -202,11 +203,14 @@ export class MetadataStore {
     }
   }
 
-  /** Apply daily decay to all memories, scaled by importance rating (1-10) */
+  /** Apply daily decay to all memories, scaled by importance rating (1-10) using ConfigStore DECAY_RATE */
   applyDailyDecay(): void {
+    const config = getConfigStore();
+    const baseDecay = config.get("DECAY_RATE");
     for (const mem of this.memories.values()) {
       const imp = mem.importance ?? 5;
-      const decayFactor = 1.0 - (0.05 * (10 - imp) / 9);
+      // Scale decay factor: lower importance decays faster, higher decays slower.
+      const decayFactor = 1.0 - (baseDecay * (10 - imp) / 5);
       mem.decay_weight = Math.max(0.0, mem.decay_weight * decayFactor);
     }
     this.save();

@@ -13,6 +13,7 @@ import { embed } from "../embedding/embed.js";
 import { getVectorStore } from "../store/vector.js";
 import { getMetadataStore } from "../store/metadata.js";
 import { getSummarizer } from "../compress/summarize.js";
+import { getConfigStore } from "../store/config.js";
 import type {
   MemoryRecord,
   MemoryType,
@@ -21,14 +22,7 @@ import type {
   ScoreResult,
 } from "../types.js";
 
-// ---------------------------------------------------------------------------
-// Thresholds
-// ---------------------------------------------------------------------------
-const STORE_THRESHOLD    = parseFloat(process.env["SCORE_STORE_THRESHOLD"]    ?? "0.7");
-const COMPRESS_THRESHOLD = parseFloat(process.env["SCORE_COMPRESS_THRESHOLD"] ?? "0.35");
 
-/** Minimum similarity to consider two memories "merge-able" during compression */
-const MERGE_SIMILARITY_THRESHOLD = 0.8;
 
 // ---------------------------------------------------------------------------
 // MemoryRouter
@@ -55,10 +49,13 @@ export class MemoryRouter {
     importance?: number
   ): Promise<EvaluateResult> {
     const { final_score } = score;
+    const config = getConfigStore();
+    const storeThreshold = config.get("STORE_THRESHOLD");
+    const compressThreshold = config.get("COMPRESS_THRESHOLD");
 
-    if (final_score >= STORE_THRESHOLD) {
+    if (final_score >= storeThreshold) {
       return this.store(content, score, type, source, tags, undefined, expires_at, importance);
-    } else if (final_score >= COMPRESS_THRESHOLD) {
+    } else if (final_score >= compressThreshold) {
       return this.compress(content, score, type, source, tags, expires_at, importance);
     } else {
       return this.discard(score);
@@ -110,13 +107,16 @@ export class MemoryRouter {
 
     const contradictionWarning = await this.checkAndLinkContradictions(id, content, tags);
 
+    const config = getConfigStore();
+    const storeThreshold = config.get("STORE_THRESHOLD");
+
     return {
       action: "stored" as RouteAction,
       memoryId: id,
       score,
       reason: contradictionWarning
-        ? `${fallbackReason ?? `Score ${score.final_score.toFixed(3)} >= ${STORE_THRESHOLD} → stored as new memory`}. ${contradictionWarning}`
-        : fallbackReason ?? `Score ${score.final_score.toFixed(3)} >= ${STORE_THRESHOLD} → stored as new memory`,
+        ? `${fallbackReason ?? `Score ${score.final_score.toFixed(3)} >= ${storeThreshold.toFixed(2)} → stored as new memory`}. ${contradictionWarning}`
+        : fallbackReason ?? `Score ${score.final_score.toFixed(3)} >= ${storeThreshold.toFixed(2)} → stored as new memory`,
     };
   }
 
@@ -140,9 +140,12 @@ export class MemoryRouter {
     // Find the most similar existing memory
     const similar = await vectorStore.query(embedding, 1);
 
+    const config = getConfigStore();
+    const mergeSimilarityThreshold = config.get("MERGE_SIMILARITY_THRESHOLD");
+
     if (
       similar.length === 0 ||
-      (similar[0]?.similarity ?? 0) < MERGE_SIMILARITY_THRESHOLD
+      (similar[0]?.similarity ?? 0) < mergeSimilarityThreshold
     ) {
       // No close enough existing memory → fall back to STORE
       const simVal = similar[0] ? similar[0].similarity.toFixed(3) : "N/A";
@@ -211,12 +214,15 @@ export class MemoryRouter {
 
     metaStore.incrementCompress();
 
+    const storeThreshold = config.get("STORE_THRESHOLD");
+    const compressThreshold = config.get("COMPRESS_THRESHOLD");
+
     return {
       action: "compressed" as RouteAction,
       memoryId: newId,
       score,
       reason:
-        `Score ${score.final_score.toFixed(3)} in [${COMPRESS_THRESHOLD}, ${STORE_THRESHOLD}) ` +
+        `Score ${score.final_score.toFixed(3)} in [${compressThreshold.toFixed(2)}, ${storeThreshold.toFixed(2)}) ` +
         `→ merged with memory ${existingId} (similarity ${(similar[0]?.similarity ?? 0).toFixed(3)})`,
     };
   }
@@ -229,10 +235,13 @@ export class MemoryRouter {
     const metaStore = getMetadataStore();
     metaStore.incrementDiscard();
 
+    const config = getConfigStore();
+    const compressThreshold = config.get("COMPRESS_THRESHOLD");
+
     return {
       action: "discarded" as RouteAction,
       score,
-      reason: `Score ${score.final_score.toFixed(3)} < ${COMPRESS_THRESHOLD} → discarded`,
+      reason: `Score ${score.final_score.toFixed(3)} < ${compressThreshold.toFixed(2)} → discarded`,
     };
   }
 

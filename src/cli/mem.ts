@@ -35,6 +35,7 @@ import {
   importFromMarkdown,
 } from "../store/backup.js";
 import { parseTTL } from "../utils/ttl.js";
+import { getConfigStore } from "../store/config.js";
 import type { MemoryType } from "../types.js";
 
 // ---------------------------------------------------------------------------
@@ -663,6 +664,61 @@ async function cmdUntag(args: ParsedArgs): Promise<void> {
   }
 }
 
+async function cmdConfig(args: ParsedArgs): Promise<void> {
+  const action = args.positional[0]; // "get" or "set"
+  const key = args.positional[1];
+  const valueStr = args.positional[2];
+
+  const configStore = getConfigStore();
+
+  if (!action) {
+    const all = configStore.getAll();
+    console.log(colorize("\n⚙️  Current Configurations:\n", "bold"));
+    for (const [k, v] of Object.entries(all)) {
+      console.log(`  ${colorize(k, "cyan")}: ${v}`);
+    }
+    console.log();
+    return;
+  }
+
+  if (action === "get") {
+    if (!key) {
+      console.error(colorize("Error: provide a config key to get. e.g. mem config get DECAY_RATE", "red"));
+      process.exit(1);
+    }
+    const val = configStore.get(key as any);
+    if (val === undefined) {
+      console.error(colorize(`Error: unknown config key "${key}"`, "red"));
+      process.exit(1);
+    }
+    console.log(`\n${colorize(key, "cyan")}: ${val}\n`);
+    return;
+  }
+
+  if (action === "set") {
+    if (!key || !valueStr) {
+      console.error(colorize("Error: provide key and value. e.g. mem config set DECAY_RATE 0.05", "red"));
+      process.exit(1);
+    }
+    const currentVal = configStore.get(key as any);
+    if (currentVal === undefined) {
+      console.error(colorize(`Error: unknown config key "${key}"`, "red"));
+      process.exit(1);
+    }
+    const parsedVal = parseFloat(valueStr);
+    if (isNaN(parsedVal)) {
+      console.error(colorize("Error: value must be a number", "red"));
+      process.exit(1);
+    }
+    configStore.set(key as any, parsedVal);
+    console.log(colorize(`\n✅ Configuration updated: ${key} = ${parsedVal}\n`, "green"));
+    return;
+  }
+
+  console.error(colorize(`Error: unknown action "${action}". Use "get" or "set".`, "red"));
+  process.exit(1);
+}
+
 function printHelp(): void {
   console.log(colorize("\nUsage:", "bold"));
   console.log("  mem add <content> [--type fact|decision|event|summary]");
@@ -680,7 +736,8 @@ function printHelp(): void {
   console.log("  mem chat");
   console.log("  mem history <memoryId>");
   console.log("  mem tag <tag_name> <search_query>");
-  console.log("  mem untag <tag_name> <search_query>\n");
+  console.log("  mem untag <tag_name> <search_query>");
+  console.log("  mem config [get|set] [key] [value]\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -734,6 +791,9 @@ async function main(): Promise<void> {
       break;
     case "untag":
       await cmdUntag(args);
+      break;
+    case "config":
+      await cmdConfig(args);
       break;
     default:
       if (args.command) {
