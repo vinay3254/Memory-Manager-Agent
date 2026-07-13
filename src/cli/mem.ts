@@ -26,7 +26,14 @@ import { embed } from "../embedding/embed.js";
 import { readFileSync, writeFileSync, statSync } from "fs";
 import { v4 as uuidv4 } from "uuid";
 import readline from "readline";
-import { exportBackup, importBackup } from "../store/backup.js";
+import {
+  exportBackup,
+  importBackup,
+  exportToMarkdown,
+  exportToCSV,
+  importFromCSV,
+  importFromMarkdown,
+} from "../store/backup.js";
 import { parseTTL } from "../utils/ttl.js";
 import type { MemoryType } from "../types.js";
 
@@ -410,9 +417,28 @@ async function cmdExport(args: ParsedArgs): Promise<void> {
     process.exit(1);
   }
 
-  console.log(colorize("⏳ Exporting memories and links...", "dim"));
+  let format = args.flags["format"] as string | undefined;
+  if (!format) {
+    if (filePath.endsWith(".csv")) format = "csv";
+    else if (filePath.endsWith(".md") || filePath.endsWith(".markdown")) format = "md";
+    else format = "json";
+  }
+
+  console.log(colorize(`⏳ Exporting memories and links as ${format.toUpperCase()}...`, "dim"));
   try {
-    const backupStr = await exportBackup();
+    const metaStore = getMetadataStore();
+    const memories = metaStore.getAll();
+    const links = metaStore.getAllLinks();
+    let backupStr = "";
+
+    if (format === "csv") {
+      backupStr = exportToCSV(memories, links);
+    } else if (format === "md") {
+      backupStr = exportToMarkdown(memories, links);
+    } else {
+      backupStr = await exportBackup();
+    }
+
     writeFileSync(filePath, backupStr, "utf-8");
     console.log(colorize(`\n✅ Backup successfully saved to ${filePath}\n`, "green"));
   } catch (err) {
@@ -428,10 +454,26 @@ async function cmdImport(args: ParsedArgs): Promise<void> {
     process.exit(1);
   }
 
-  console.log(colorize(`⏳ Importing backup from ${filePath}...`, "dim"));
+  let format = args.flags["format"] as string | undefined;
+  if (!format) {
+    if (filePath.endsWith(".csv")) format = "csv";
+    else if (filePath.endsWith(".md") || filePath.endsWith(".markdown")) format = "md";
+    else format = "json";
+  }
+
+  console.log(colorize(`⏳ Importing backup from ${filePath} as ${format.toUpperCase()}...`, "dim"));
   try {
     const backupStr = readFileSync(filePath, "utf-8");
-    const stats = await importBackup(backupStr);
+    let stats: { importedMemories: number; importedLinks: number };
+
+    if (format === "csv") {
+      stats = await importFromCSV(backupStr);
+    } else if (format === "md") {
+      stats = await importFromMarkdown(backupStr);
+    } else {
+      stats = await importBackup(backupStr);
+    }
+
     console.log(
       colorize(
         `\n✅ Successfully imported ${stats.importedMemories} memories and ${stats.importedLinks} relationship links!\n`,

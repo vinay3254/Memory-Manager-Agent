@@ -6,4 +6,5 @@ data/
 *.log
 .cache/
 backup.json
-
+backup.csv
+backup.md
