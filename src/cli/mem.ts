@@ -25,6 +25,7 @@ import { getSummarizer } from "../compress/summarize.js";
 import { embed } from "../embedding/embed.js";
 import { readFileSync, writeFileSync, statSync } from "fs";
 import { v4 as uuidv4 } from "uuid";
+import readline from "readline";
 import { exportBackup, importBackup } from "../store/backup.js";
 import { parseTTL } from "../utils/ttl.js";
 import type { MemoryType } from "../types.js";
@@ -450,6 +451,85 @@ async function cmdTags(): Promise<void> {
   console.log();
 }
 
+async function cmdChat(): Promise<void> {
+  console.log(colorize("\n💬 Entering Memory Manager Agent Chat Mode.", "bold"));
+  console.log(colorize("   Type statements to store them, or ask questions to query memories.", "dim"));
+  console.log(colorize("   Type /exit or /quit to leave.\n", "dim"));
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  const questionWords = ["what", "how", "who", "why", "where", "is", "can", "are", "do", "does", "did", "which", "whose", "whom", "will", "would", "should"];
+
+  const promptUser = () => {
+    rl.question(colorize("You > ", "green"), async (input) => {
+      const query = input.trim();
+      if (query.toLowerCase() === "/exit" || query.toLowerCase() === "/quit") {
+        rl.close();
+        return;
+      }
+
+      if (!query) {
+        promptUser();
+        return;
+      }
+
+      const isQuestion = query.endsWith("?") ||
+        questionWords.some(word => query.toLowerCase().startsWith(word + " "));
+
+      if (isQuestion) {
+        console.log(colorize("🔍 Searching memories...", "dim"));
+        const metaStore = getMetadataStore();
+        const retriever = getRetriever();
+
+        const searchResult = await retriever.retrieve(query, 5);
+        const retrievedMemories = searchResult.memories.map(m => m.memory.content);
+
+        if (retrievedMemories.length === 0) {
+          console.log(colorize("\nAgent > ", "blue") + "I don't have any memories stored yet.\n");
+        } else {
+          try {
+            const summarizer = getSummarizer();
+            const answer = await summarizer.answerQuestion(query, retrievedMemories);
+            console.log(`\n${colorize("Agent >", "blue")} ${answer}\n`);
+          } catch (err) {
+            console.error(colorize(`\nError: ${String(err)}\n`, "red"));
+          }
+        }
+      } else {
+        console.log(colorize("⏳ Evaluating memory...", "dim"));
+        try {
+          const scoreEngine = getScoreEngine();
+          const router = getMemoryRouter();
+
+          const score = await scoreEngine.score(query);
+          const result = await router.route(query, score, "fact", "cli-chat", []);
+
+          const actionColor: Record<string, keyof typeof C> = {
+            stored: "green",
+            compressed: "yellow",
+            discarded: "red",
+          };
+          const color = actionColor[result.action] ?? "white";
+          const icon = { stored: "✅", compressed: "🔀", discarded: "🗑️" }[result.action] ?? "❓";
+
+          console.log(
+            `\n${icon} ${colorize(result.action.toUpperCase(), color as keyof typeof C)} ${result.memoryId ? colorize(`[${result.memoryId.slice(0, 8)}...]`, "gray") : ""}`
+          );
+          console.log(colorize(`   ${result.reason}\n`, "dim"));
+        } catch (err) {
+          console.error(colorize(`\nError: ${String(err)}\n`, "red"));
+        }
+      }
+      promptUser();
+    });
+  };
+
+  promptUser();
+}
+
 function printHelp(): void {
   console.log(colorize("\nUsage:", "bold"));
   console.log("  mem add <content> [--type fact|decision|event|summary]");
@@ -463,7 +543,8 @@ function printHelp(): void {
   console.log("  mem link <sourceId> <targetId> [relation]");
   console.log("  mem links <memoryId>");
   console.log("  mem export <file_path>");
-  console.log("  mem import <file_path>\n");
+  console.log("  mem import <file_path>");
+  console.log("  mem chat\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -505,6 +586,9 @@ async function main(): Promise<void> {
       break;
     case "import":
       await cmdImport(args);
+      break;
+    case "chat":
+      await cmdChat();
       break;
     default:
       if (args.command) {

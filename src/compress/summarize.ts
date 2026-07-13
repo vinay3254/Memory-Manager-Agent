@@ -182,6 +182,35 @@ Output ONLY "CONTRADICTION" if they contradict, or "OK" if they do not. Do not i
     const textResult = content.text.trim().toUpperCase();
     return textResult.includes("CONTRADICTION");
   }
+
+  /**
+   * Answers a user's question using retrieved memories as context.
+   */
+  async answerQuestion(question: string, contextMemories: string[]): Promise<string> {
+    const prompt = `You are a helpful assistant. Answer the user's question based ONLY on the provided memories.
+If the memories do not contain the answer, say "I don't have enough memories to answer that."
+
+MEMORIES:
+${contextMemories.map((m, i) => `${i + 1}. ${m}`).join("\n")}
+
+QUESTION:
+${question}
+
+Answer:`;
+
+    const response = await this.client.messages.create({
+      model: this.model,
+      max_tokens: 512,
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const content = response.content[0];
+    if (content?.type !== "text") {
+      return "Error: Unexpected response type from assistant.";
+    }
+
+    return content.text.trim();
+  }
 }
 
 // ---------------------------------------------------------------------------
