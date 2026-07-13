@@ -472,6 +472,30 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
+// Tool: memory_tag_stats
+// ---------------------------------------------------------------------------
+
+server.tool(
+  "memory_tag_stats",
+  "Retrieve list of all tags currently in the memory store along with their frequency counts.",
+  {},
+  async () => {
+    try {
+      const metaStore = getMetadataStore();
+      const stats = metaStore.getTagStats();
+      return {
+        content: [{ type: "text", text: JSON.stringify(stats, null, 2) }],
+      };
+    } catch (err) {
+      return {
+        content: [{ type: "text", text: `Error: ${String(err)}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
 // Main — connect transport and start cron
 // ---------------------------------------------------------------------------
 

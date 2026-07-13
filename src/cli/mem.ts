@@ -420,6 +420,24 @@ async function cmdImport(args: ParsedArgs): Promise<void> {
   }
 }
 
+async function cmdTags(): Promise<void> {
+  const metaStore = getMetadataStore();
+  const stats = metaStore.getTagStats();
+
+  const entries = Object.entries(stats).sort((a, b) => b[1] - a[1]);
+
+  if (entries.length === 0) {
+    console.log(colorize("\n  No tags found in the database.\n", "yellow"));
+    return;
+  }
+
+  console.log(colorize("\n🏷️  Memory Store Tags & Frequencies:\n", "bold"));
+  for (const [tag, count] of entries) {
+    console.log(`  ${colorize(`#${tag}`, "cyan")} (${count} ${count === 1 ? "memory" : "memories"})`);
+  }
+  console.log();
+}
+
 function printHelp(): void {
   console.log(colorize("\nUsage:", "bold"));
   console.log("  mem add <content> [--type fact|decision|event|summary]");
@@ -427,6 +445,7 @@ function printHelp(): void {
   console.log("                    [--tag <tag>] [--tag <tag>...]");
   console.log("  mem search <query> [--limit <n>] [--tag <tag>] [--type <type>]");
   console.log("  mem stats");
+  console.log("  mem tags");
   console.log("  mem decay");
   console.log("  mem compress <topic>");
   console.log("  mem link <sourceId> <targetId> [relation]");
@@ -453,6 +472,9 @@ async function main(): Promise<void> {
       break;
     case "stats":
       await cmdStats();
+      break;
+    case "tags":
+      await cmdTags();
       break;
     case "decay":
       await cmdDecay();

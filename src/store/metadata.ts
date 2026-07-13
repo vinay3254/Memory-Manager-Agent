@@ -310,6 +310,16 @@ export class MetadataStore {
     this.save();
   }
 
+  getTagStats(): Record<string, number> {
+    const stats: Record<string, number> = {};
+    for (const mem of this.memories.values()) {
+      for (const tag of mem.tags) {
+        stats[tag] = (stats[tag] ?? 0) + 1;
+      }
+    }
+    return stats;
+  }
+
   close(): void {
     // No-op for JSON store
   }
