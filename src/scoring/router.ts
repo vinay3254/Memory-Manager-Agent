@@ -50,14 +50,15 @@ export class MemoryRouter {
     score: ScoreResult,
     type: MemoryType = "fact",
     source: string = "unknown",
-    tags: string[] = []
+    tags: string[] = [],
+    expires_at?: number
   ): Promise<EvaluateResult> {
     const { final_score } = score;
 
     if (final_score >= STORE_THRESHOLD) {
-      return this.store(content, score, type, source, tags);
+      return this.store(content, score, type, source, tags, undefined, expires_at);
     } else if (final_score >= COMPRESS_THRESHOLD) {
-      return this.compress(content, score, type, source, tags);
+      return this.compress(content, score, type, source, tags, expires_at);
     } else {
       return this.discard(score);
     }
@@ -73,7 +74,8 @@ export class MemoryRouter {
     type: MemoryType,
     source: string,
     tags: string[],
-    fallbackReason?: string
+    fallbackReason?: string,
+    expires_at?: number
   ): Promise<EvaluateResult> {
     const id = uuidv4();
     const now = Date.now();
@@ -90,6 +92,7 @@ export class MemoryRouter {
       decay_weight: 1.0,
       merged_from: [],
       tags,
+      expires_at,
     };
 
     const metaStore = getMetadataStore();
@@ -119,7 +122,8 @@ export class MemoryRouter {
     score: ScoreResult,
     type: MemoryType,
     source: string,
-    tags: string[]
+    tags: string[],
+    expires_at?: number
   ): Promise<EvaluateResult> {
     const embedding = await embed(content);
     const vectorStore = getVectorStore();
@@ -140,7 +144,8 @@ export class MemoryRouter {
         type,
         source,
         tags,
-        `Score ${score.final_score.toFixed(3)} is in compression range but no similar memory exists (max similarity: ${simVal}) → stored as new memory`
+        `Score ${score.final_score.toFixed(3)} is in compression range but no similar memory exists (max similarity: ${simVal}) → stored as new memory`,
+        expires_at
       );
     }
 
@@ -155,7 +160,8 @@ export class MemoryRouter {
         type,
         source,
         tags,
-        `Score ${score.final_score.toFixed(3)} is in compression range but the matched memory has stale metadata → stored as new memory`
+        `Score ${score.final_score.toFixed(3)} is in compression range but the matched memory has stale metadata → stored as new memory`,
+        expires_at
       );
     }
 
@@ -178,6 +184,7 @@ export class MemoryRouter {
       decay_weight: Math.max(existing.decay_weight, 0.5), // preserve some weight
       merged_from: [existingId, ...existing.merged_from],
       tags: [...new Set([...existing.tags, ...tags])],
+      expires_at: existing.expires_at || expires_at,
     };
 
     // Remove old entry, insert merged entry

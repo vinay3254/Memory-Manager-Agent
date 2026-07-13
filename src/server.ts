@@ -27,6 +27,7 @@ import { runDecayPass, startDecayScheduler } from "./decay/scheduler.js";
 import { embed } from "./embedding/embed.js";
 import { v4 as uuidv4 } from "uuid";
 import { exportBackup, importBackup } from "./store/backup.js";
+import { parseTTL } from "./utils/ttl.js";
 import type { MemoryType, MemoryLink, LinkedMemory } from "./types.js";
 
 // ---------------------------------------------------------------------------
@@ -69,11 +70,27 @@ server.tool(
       .optional()
       .default([])
       .describe("Topic or entity tags for clustering"),
+    expiresAt: z
+      .number()
+      .optional()
+      .describe("Optional absolute expiration timestamp (Unix milliseconds)"),
+    ttl: z
+      .string()
+      .optional()
+      .describe("Optional time-to-live string (e.g., '30d', '24h', '10m')"),
   },
-  async ({ content, context, type, source, tags }) => {
+  async ({ content, context, type, source, tags, expiresAt, ttl }) => {
     try {
       const scoreEngine = getScoreEngine();
       const router = getMemoryRouter();
+
+      let expires_at: number | undefined = expiresAt;
+      if (!expires_at && ttl) {
+        const parsed = parseTTL(ttl);
+        if (parsed) {
+          expires_at = Date.now() + parsed;
+        }
+      }
 
       const score = await scoreEngine.score(content, context);
       const result = await router.route(
@@ -81,7 +98,8 @@ server.tool(
         score,
         (type as MemoryType) ?? "fact",
         source ?? "mcp-client",
-        tags ?? []
+        tags ?? [],
+        expires_at
       );
 
       const output = {
@@ -523,3 +541,4 @@ main().catch((err) => {
   process.stderr.write(`[MemoryManager] Fatal error: ${String(err)}\n`);
   process.exit(1);
 });
+

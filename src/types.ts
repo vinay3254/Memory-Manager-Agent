@@ -43,6 +43,9 @@ export interface MemoryRecord {
 
   /** Free-form topic/entity tags for cluster-based archiving */
   tags: string[];
+
+  /** Expiration timestamp (Unix milliseconds) after which memory is discarded */
+  expires_at?: number;
 }
 
 /** Semantic types a memory can hold */

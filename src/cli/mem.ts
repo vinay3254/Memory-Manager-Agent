@@ -26,6 +26,7 @@ import { embed } from "../embedding/embed.js";
 import { readFileSync, writeFileSync, statSync } from "fs";
 import { v4 as uuidv4 } from "uuid";
 import { exportBackup, importBackup } from "../store/backup.js";
+import { parseTTL } from "../utils/ttl.js";
 import type { MemoryType } from "../types.js";
 
 // ---------------------------------------------------------------------------
@@ -123,6 +124,17 @@ async function cmdAdd(args: ParsedArgs): Promise<void> {
   const source = (args.flags["source"] as string | undefined) ?? "cli";
   const context = args.flags["context"] as string | undefined;
   const tags = args.tags;
+  const ttl = args.flags["ttl"] as string | undefined;
+
+  let expires_at: number | undefined;
+  if (ttl) {
+    const duration = parseTTL(ttl);
+    if (duration !== undefined) {
+      expires_at = Date.now() + duration;
+    } else {
+      console.warn(colorize(`⚠️  Invalid TTL format "${ttl}". Ignoring TTL.`, "yellow"));
+    }
+  }
 
   console.log(colorize("⏳ Evaluating memory...", "dim"));
 
@@ -130,7 +142,7 @@ async function cmdAdd(args: ParsedArgs): Promise<void> {
   const router = getMemoryRouter();
 
   const score = await scoreEngine.score(content, context);
-  const result = await router.route(content, score, type, source, tags);
+  const result = await router.route(content, score, type, source, tags, expires_at);
 
   const actionColor: Record<string, keyof typeof C> = {
     stored: "green",
@@ -441,7 +453,7 @@ async function cmdTags(): Promise<void> {
 function printHelp(): void {
   console.log(colorize("\nUsage:", "bold"));
   console.log("  mem add <content> [--type fact|decision|event|summary]");
-  console.log("                    [--source <name>] [--context <ctx>]");
+  console.log("                    [--source <name>] [--context <ctx>] [--ttl <duration>]");
   console.log("                    [--tag <tag>] [--tag <tag>...]");
   console.log("  mem search <query> [--limit <n>] [--tag <tag>] [--type <type>]");
   console.log("  mem stats");

@@ -41,6 +41,21 @@ export async function runDecayPass(): Promise<DecayRunResult> {
   const vectorStore = getVectorStore();
   const summarizer = getSummarizer();
 
+  // Step 0: Prune expired memories
+  const allMemories = metaStore.getAll();
+  const expiredIds: string[] = [];
+  const now = Date.now();
+  for (const m of allMemories) {
+    if (m.expires_at && now > m.expires_at) {
+      expiredIds.push(m.id);
+    }
+  }
+  if (expiredIds.length > 0) {
+    metaStore.deleteMany(expiredIds);
+    await vectorStore.deleteMany(expiredIds);
+    process.stderr.write(`[Decay] Pruned ${expiredIds.length} expired memories.\n`);
+  }
+
   // Step 1: Apply global decay
   metaStore.applyDailyDecay();
   process.stderr.write("[Decay] Applied daily 3% decay to all memories.\n");
