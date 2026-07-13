@@ -51,14 +51,15 @@ export class MemoryRouter {
     type: MemoryType = "fact",
     source: string = "unknown",
     tags: string[] = [],
-    expires_at?: number
+    expires_at?: number,
+    importance?: number
   ): Promise<EvaluateResult> {
     const { final_score } = score;
 
     if (final_score >= STORE_THRESHOLD) {
-      return this.store(content, score, type, source, tags, undefined, expires_at);
+      return this.store(content, score, type, source, tags, undefined, expires_at, importance);
     } else if (final_score >= COMPRESS_THRESHOLD) {
-      return this.compress(content, score, type, source, tags, expires_at);
+      return this.compress(content, score, type, source, tags, expires_at, importance);
     } else {
       return this.discard(score);
     }
@@ -75,7 +76,8 @@ export class MemoryRouter {
     source: string,
     tags: string[],
     fallbackReason?: string,
-    expires_at?: number
+    expires_at?: number,
+    importance?: number
   ): Promise<EvaluateResult> {
     const id = uuidv4();
     const now = Date.now();
@@ -93,6 +95,7 @@ export class MemoryRouter {
       merged_from: [],
       tags,
       expires_at,
+      importance: importance ?? 5,
     };
 
     const metaStore = getMetadataStore();
@@ -127,7 +130,8 @@ export class MemoryRouter {
     type: MemoryType,
     source: string,
     tags: string[],
-    expires_at?: number
+    expires_at?: number,
+    importance?: number
   ): Promise<EvaluateResult> {
     const embedding = await embed(content);
     const vectorStore = getVectorStore();
@@ -149,7 +153,8 @@ export class MemoryRouter {
         source,
         tags,
         `Score ${score.final_score.toFixed(3)} is in compression range but no similar memory exists (max similarity: ${simVal}) → stored as new memory`,
-        expires_at
+        expires_at,
+        importance
       );
     }
 
@@ -165,7 +170,8 @@ export class MemoryRouter {
         source,
         tags,
         `Score ${score.final_score.toFixed(3)} is in compression range but the matched memory has stale metadata → stored as new memory`,
-        expires_at
+        expires_at,
+        importance
       );
     }
 
@@ -189,6 +195,7 @@ export class MemoryRouter {
       merged_from: [existingId, ...existing.merged_from],
       tags: [...new Set([...existing.tags, ...tags])],
       expires_at: existing.expires_at || expires_at,
+      importance: Math.max(existing.importance ?? 5, importance ?? 5),
     };
 
     // Remove old entry, insert merged entry

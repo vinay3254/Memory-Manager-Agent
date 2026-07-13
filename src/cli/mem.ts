@@ -126,6 +126,7 @@ async function cmdAdd(args: ParsedArgs): Promise<void> {
   const context = args.flags["context"] as string | undefined;
   const tags = args.tags;
   const ttl = args.flags["ttl"] as string | undefined;
+  const importanceStr = args.flags["importance"] as string | undefined;
 
   let expires_at: number | undefined;
   if (ttl) {
@@ -137,13 +138,23 @@ async function cmdAdd(args: ParsedArgs): Promise<void> {
     }
   }
 
+  let importance: number | undefined;
+  if (importanceStr) {
+    const val = parseInt(importanceStr, 10);
+    if (val >= 1 && val <= 10) {
+      importance = val;
+    } else {
+      console.warn(colorize(`⚠️  Importance rating must be an integer between 1 and 10. Defaulting to 5.`, "yellow"));
+    }
+  }
+
   console.log(colorize("⏳ Evaluating memory...", "dim"));
 
   const scoreEngine = getScoreEngine();
   const router = getMemoryRouter();
 
   const score = await scoreEngine.score(content, context);
-  const result = await router.route(content, score, type, source, tags, expires_at);
+  const result = await router.route(content, score, type, source, tags, expires_at, importance);
 
   const actionColor: Record<string, keyof typeof C> = {
     stored: "green",
@@ -563,7 +574,7 @@ async function cmdHistory(args: ParsedArgs): Promise<void> {
 function printHelp(): void {
   console.log(colorize("\nUsage:", "bold"));
   console.log("  mem add <content> [--type fact|decision|event|summary]");
-  console.log("                    [--source <name>] [--context <ctx>] [--ttl <duration>]");
+  console.log("                    [--source <name>] [--context <ctx>] [--ttl <duration>] [--importance <1-10>]");
   console.log("                    [--tag <tag>] [--tag <tag>...]");
   console.log("  mem search <query> [--limit <n>] [--tag <tag>] [--type <type>]");
   console.log("  mem stats");

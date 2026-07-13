@@ -49,6 +49,9 @@ export interface MemoryRecord {
 
   /** Historical log of reads, modifications, or creation events */
   access_history?: Array<{ timestamp: number; action: string }>;
+
+  /** User or agent designated importance rating (1-10), default 5 */
+  importance?: number;
 }
 
 /** Semantic types a memory can hold */

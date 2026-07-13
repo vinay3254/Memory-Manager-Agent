@@ -184,10 +184,12 @@ export class MetadataStore {
     }
   }
 
-  /** Apply daily decay to all memories: weight *= 0.97 */
+  /** Apply daily decay to all memories, scaled by importance rating (1-10) */
   applyDailyDecay(): void {
     for (const mem of this.memories.values()) {
-      mem.decay_weight = Math.max(0.0, mem.decay_weight * 0.97);
+      const imp = mem.importance ?? 5;
+      const decayFactor = 1.0 - (0.05 * (10 - imp) / 9);
+      mem.decay_weight = Math.max(0.0, mem.decay_weight * decayFactor);
     }
     this.save();
   }

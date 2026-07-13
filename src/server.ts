@@ -78,8 +78,14 @@ server.tool(
       .string()
       .optional()
       .describe("Optional time-to-live string (e.g., '30d', '24h', '10m')"),
+    importance: z
+      .number()
+      .min(1)
+      .max(10)
+      .optional()
+      .describe("Optional importance rating (1-10)"),
   },
-  async ({ content, context, type, source, tags, expiresAt, ttl }) => {
+  async ({ content, context, type, source, tags, expiresAt, ttl, importance }) => {
     try {
       const scoreEngine = getScoreEngine();
       const router = getMemoryRouter();
@@ -99,7 +105,8 @@ server.tool(
         (type as MemoryType) ?? "fact",
         source ?? "mcp-client",
         tags ?? [],
-        expires_at
+        expires_at,
+        importance
       );
 
       const output = {
