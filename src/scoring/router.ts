@@ -105,11 +105,15 @@ export class MemoryRouter {
       created_at: now,
     });
 
+    const contradictionWarning = await this.checkAndLinkContradictions(id, content, tags);
+
     return {
       action: "stored" as RouteAction,
       memoryId: id,
       score,
-      reason: fallbackReason ?? `Score ${score.final_score.toFixed(3)} >= ${STORE_THRESHOLD} → stored as new memory`,
+      reason: contradictionWarning
+        ? `${fallbackReason ?? `Score ${score.final_score.toFixed(3)} >= ${STORE_THRESHOLD} → stored as new memory`}. ${contradictionWarning}`
+        : fallbackReason ?? `Score ${score.final_score.toFixed(3)} >= ${STORE_THRESHOLD} → stored as new memory`,
     };
   }
 
@@ -223,6 +227,35 @@ export class MemoryRouter {
       score,
       reason: `Score ${score.final_score.toFixed(3)} < ${COMPRESS_THRESHOLD} → discarded`,
     };
+  }
+
+  private async checkAndLinkContradictions(
+    newId: string,
+    content: string,
+    tags: string[]
+  ): Promise<string | null> {
+    const vectorStore = getVectorStore();
+    const metaStore = getMetadataStore();
+    const embedding = await embed(content);
+
+    // Query for similar memories
+    const similar = await vectorStore.query(embedding, 3);
+    for (const match of similar) {
+      if (match.id === newId) continue;
+      if (match.similarity >= 0.60) {
+        const existing = metaStore.getById(match.id);
+        if (existing) {
+          const summarizer = getSummarizer();
+          const isContradiction = await summarizer.detectContradiction(existing.content, content);
+          if (isContradiction) {
+            // Found a contradiction! Link them.
+            metaStore.addLink(newId, existing.id, "contradicts");
+            return `Contradiction detected with memory ${existing.id.slice(0, 8)}... ("${existing.content}"). Automatically created 'contradicts' relationship link.`;
+          }
+        }
+      }
+    }
+    return null;
   }
 }
 

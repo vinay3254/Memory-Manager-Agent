@@ -144,6 +144,44 @@ Rules:
     if (text?.type !== "text") return "general";
     return text.text.trim().toLowerCase().slice(0, 50);
   }
+
+  /**
+   * Detects if two memories contradict each other.
+   * Returns true if they are mutually exclusive or express conflicting facts/decisions.
+   */
+  async detectContradiction(memA: string, memB: string): Promise<boolean> {
+    const prompt = `You are a memory consistency engine. Your task is to detect if two memory entries contradict each other.
+Contradiction means they assert conflicting facts, opposing decisions, or mutually exclusive states.
+Examples of contradiction:
+- "The server port is 3000" vs "The server port is 8080"
+- "Decided to use MySQL" vs "Decided to use PostgreSQL"
+
+Examples of non-contradiction (related or complementary):
+- "TypeScript adds types to JS" vs "JavaScript has no static types" (different ways of saying consistent concepts)
+- "Port is 3000" vs "Server is written in Node.js"
+
+MEMORY A:
+${memA}
+
+MEMORY B:
+${memB}
+
+Output ONLY "CONTRADICTION" if they contradict, or "OK" if they do not. Do not include any explanation or other text.`;
+
+    const response = await this.client.messages.create({
+      model: this.model,
+      max_tokens: 16,
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const content = response.content[0];
+    if (content?.type !== "text") {
+      return false;
+    }
+
+    const textResult = content.text.trim().toUpperCase();
+    return textResult.includes("CONTRADICTION");
+  }
 }
 
 // ---------------------------------------------------------------------------
