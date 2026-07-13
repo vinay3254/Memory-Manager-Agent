@@ -74,7 +74,11 @@ export class MetadataStore {
   // -------------------------------------------------------------------------
 
   insert(record: Omit<MemoryRecord, "embedding">): void {
-    this.memories.set(record.id, { ...record });
+    const history = record.access_history ?? [];
+    if (history.length === 0) {
+      history.push({ timestamp: Date.now(), action: "created" });
+    }
+    this.memories.set(record.id, { ...record, access_history: history });
     this.save();
   }
 
@@ -85,7 +89,10 @@ export class MetadataStore {
     const current = this.memories.get(id);
     if (!current) throw new Error(`Memory not found: ${id}`);
 
-    const merged = { ...current, ...patch };
+    const history = [...(current.access_history ?? [])];
+    history.push({ timestamp: Date.now(), action: "updated" });
+
+    const merged = { ...current, ...patch, access_history: history };
     this.memories.set(id, merged);
     this.save();
   }
@@ -163,6 +170,8 @@ export class MetadataStore {
       mem.last_accessed = Date.now();
       mem.access_count += 1;
       mem.decay_weight = Math.min(1.0, mem.decay_weight + (1.0 - mem.decay_weight) * 0.3);
+      if (!mem.access_history) mem.access_history = [];
+      mem.access_history.push({ timestamp: Date.now(), action: "retrieved" });
       this.save();
     }
   }

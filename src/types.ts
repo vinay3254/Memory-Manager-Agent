@@ -46,6 +46,9 @@ export interface MemoryRecord {
 
   /** Expiration timestamp (Unix milliseconds) after which memory is discarded */
   expires_at?: number;
+
+  /** Historical log of reads, modifications, or creation events */
+  access_history?: Array<{ timestamp: number; action: string }>;
 }
 
 /** Semantic types a memory can hold */

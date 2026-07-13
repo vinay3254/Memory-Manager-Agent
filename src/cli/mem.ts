@@ -530,6 +530,36 @@ async function cmdChat(): Promise<void> {
   promptUser();
 }
 
+async function cmdHistory(args: ParsedArgs): Promise<void> {
+  const id = args.positional[0];
+  if (!id) {
+    console.error(colorize("Error: provide a memory ID. e.g. mem history <id>", "red"));
+    process.exit(1);
+  }
+
+  const metaStore = getMetadataStore();
+  const mem = metaStore.getById(id);
+  if (!mem) {
+    console.error(colorize(`Error: memory with ID ${id} not found.`, "red"));
+    process.exit(1);
+  }
+
+  console.log(colorize(`\n📜 Access history for memory ${id}:`, "bold"));
+  console.log(`  Content: "${mem.content}"\n`);
+
+  const history = mem.access_history ?? [];
+  if (history.length === 0) {
+    console.log(colorize("  No access history recorded.\n", "yellow"));
+    return;
+  }
+
+  for (const log of history) {
+    const timeStr = new Date(log.timestamp).toISOString();
+    console.log(`  ${colorize(`[${timeStr}]`, "gray")} ${colorize(log.action.toUpperCase(), "cyan")}`);
+  }
+  console.log();
+}
+
 function printHelp(): void {
   console.log(colorize("\nUsage:", "bold"));
   console.log("  mem add <content> [--type fact|decision|event|summary]");
@@ -544,7 +574,8 @@ function printHelp(): void {
   console.log("  mem links <memoryId>");
   console.log("  mem export <file_path>");
   console.log("  mem import <file_path>");
-  console.log("  mem chat\n");
+  console.log("  mem chat");
+  console.log("  mem history <memoryId>\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -589,6 +620,9 @@ async function main(): Promise<void> {
       break;
     case "chat":
       await cmdChat();
+      break;
+    case "history":
+      await cmdHistory(args);
       break;
     default:
       if (args.command) {
