@@ -36,6 +36,7 @@ import {
 } from "../store/backup.js";
 import { parseTTL } from "../utils/ttl.js";
 import { getConfigStore } from "../store/config.js";
+import { consolidateMemories } from "../compress/consolidate.js";
 import type { MemoryType } from "../types.js";
 
 // ---------------------------------------------------------------------------
@@ -755,6 +756,26 @@ async function cmdArchiveRestore(args: ParsedArgs): Promise<void> {
   console.log(colorize(`\n✅ Memory successfully restored from archive: "${mem.content}"\n`, "green"));
 }
 
+async function cmdConsolidate(args: ParsedArgs): Promise<void> {
+  const tag = args.positional[0];
+
+  console.log(colorize("⏳ Consolidating memories...", "dim"));
+  try {
+    const stats = await consolidateMemories(tag);
+    if (stats.consolidatedCount === 0) {
+      console.log(colorize("\nℹ️  No memory clusters eligible/found for consolidation (needs tag with >= 3 memories).\n", "yellow"));
+      return;
+    }
+
+    console.log(colorize(`\n✅ Successfully consolidated ${stats.consolidatedCount} memories into a single summary!\n`, "green"));
+    console.log(`Summary Memory ID: ${colorize(stats.newSummaryId!, "cyan")}`);
+    console.log(`Content: "${stats.summaryText!}"\n`);
+  } catch (err) {
+    console.error(colorize(`\n❌ Error: ${String(err)}\n`, "red"));
+    process.exit(1);
+  }
+}
+
 function printHelp(): void {
   console.log(colorize("\nUsage:", "bold"));
   console.log("  mem add <content> [--type fact|decision|event|summary]");
@@ -774,6 +795,7 @@ function printHelp(): void {
   console.log("  mem tag <tag_name> <search_query>");
   console.log("  mem untag <tag_name> <search_query>");
   console.log("  mem config [get|set] [key] [value]");
+  console.log("  mem consolidate [tag]");
   console.log("  mem archive [list|restore] [memoryId]\n");
 }
 
@@ -843,6 +865,9 @@ async function main(): Promise<void> {
         console.error(colorize(`Error: unknown archive command "${subCommand}". Use "list" or "restore".`, "red"));
         process.exit(1);
       }
+      break;
+    case "consolidate":
+      await cmdConsolidate(args);
       break;
     default:
       if (args.command) {
