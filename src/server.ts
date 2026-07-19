@@ -29,6 +29,7 @@ import { v4 as uuidv4 } from "uuid";
 import { exportBackup, importBackup } from "./store/backup.js";
 import { parseTTL } from "./utils/ttl.js";
 import { autoLinkMemories } from "./store/autolink.js";
+import { consolidateMemories } from "./compress/consolidate.js";
 import type { MemoryType, MemoryLink, LinkedMemory } from "./types.js";
 
 // ---------------------------------------------------------------------------
@@ -575,6 +576,39 @@ server.tool(
         content: [{
           type: "text",
           text: `Auto-linker run complete. Created ${stats.linksCreated} new semantic links.\n\nDetails:\n${stats.details.join("\n")}`
+        }],
+      };
+    } catch (err) {
+      return {
+        content: [{ type: "text", text: `Error: ${String(err)}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Tool: memory_consolidate
+// ---------------------------------------------------------------------------
+
+server.tool(
+  "memory_consolidate",
+  "Consolidate memories that share a tag into a single summary memory and archive the originals.",
+  {
+    tag: z.string().optional().describe("Optional tag to consolidate. If omitted, auto-discovers tag with >= 3 memories."),
+  },
+  async ({ tag }) => {
+    try {
+      const stats = await consolidateMemories(tag);
+      if (stats.consolidatedCount === 0) {
+        return {
+          content: [{ type: "text", text: "No memory clusters eligible/found for consolidation." }],
+        };
+      }
+      return {
+        content: [{
+          type: "text",
+          text: `Consolidated ${stats.consolidatedCount} memories into new summary memory [${stats.newSummaryId}].\nSummary content: "${stats.summaryText}"`
         }],
       };
     } catch (err) {

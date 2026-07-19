@@ -120,6 +120,47 @@ Rules:
     return content.text.trim();
   }
 
+  /**
+   * Consolidates a group of related memories into a single semantic summary block.
+   */
+  async consolidate(memories: string[], topic: string): Promise<string> {
+    if (memories.length === 0) {
+      throw new Error("Cannot consolidate an empty list");
+    }
+    if (memories.length === 1) {
+      return memories[0]!;
+    }
+
+    const memoriesList = memories
+      .map((m, i) => `${i + 1}. ${m}`)
+      .join("\n");
+
+    const prompt = `You are a memory consolidation engine. Your task is to synthesize several related facts on the topic "${topic}" into a single cohesive, unified, high-level summary memory.
+
+MEMORIES TO CONSOLIDATE:
+${memoriesList}
+
+Rules:
+- Output ONE clear, unified summary memory that combines the overlapping and related points.
+- Preserve all key, non-overlapping facts (e.g., specific ports, versions, or decisions) but condense them into a single coherent paragraph.
+- Write in a third-person, factual, neutral tone.
+- Output ONLY the consolidated memory text, no preamble or explanation.
+- Aim for 2-3 sentences.`;
+
+    const response = await this.client.messages.create({
+      model: this.model,
+      max_tokens: 512,
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const content = response.content[0];
+    if (content?.type !== "text") {
+      throw new Error("Unexpected response type from Claude");
+    }
+
+    return content.text.trim();
+  }
+
   // -------------------------------------------------------------------------
   // topicExtract — extract a topic label from memory content
   // -------------------------------------------------------------------------
