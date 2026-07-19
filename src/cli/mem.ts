@@ -38,6 +38,7 @@ import { parseTTL } from "../utils/ttl.js";
 import { getConfigStore } from "../store/config.js";
 import { autoLinkMemories } from "../store/autolink.js";
 import { consolidateMemories } from "../compress/consolidate.js";
+import { findAndExplainPath } from "../retrieve/path.js";
 import { explainConcept } from "../retrieve/explain.js";
 import type { MemoryType } from "../types.js";
 
@@ -762,6 +763,26 @@ async function cmdConsolidate(args: ParsedArgs): Promise<void> {
   }
 }
 
+async function cmdPath(args: ParsedArgs): Promise<void> {
+  const start = args.positional[0];
+  const end = args.positional[1];
+  if (!start || !end) {
+    console.error(colorize("Error: provide a starting concept and destination concept. e.g. mem path \"React\" \"JavaScript\"", "red"));
+    process.exit(1);
+  }
+
+  console.log(colorize(`⏳ Tracing relationship path from "${start}" to "${end}"...\n`, "dim"));
+  try {
+    const result = await findAndExplainPath(start, end);
+    console.log(colorize("📍 Pathfinder Result:\n", "bold"));
+    console.log(result);
+    console.log();
+  } catch (err) {
+    console.error(colorize(`\n❌ Error: ${String(err)}\n`, "red"));
+    process.exit(1);
+  }
+}
+
 async function cmdExplain(args: ParsedArgs): Promise<void> {
   const concept = args.positional[0];
   if (!concept) {
@@ -802,6 +823,7 @@ function printHelp(): void {
   console.log("  mem config [get|set] [key] [value]");
   console.log("  mem consolidate [tag]");
   console.log("  mem explain <concept>");
+  console.log("  mem path <startConcept> <endConcept>");
   console.log("  mem autolink\n");
 }
 
@@ -865,6 +887,9 @@ async function main(): Promise<void> {
       break;
     case "consolidate":
       await cmdConsolidate(args);
+      break;
+    case "path":
+      await cmdPath(args);
       break;
     case "explain":
       await cmdExplain(args);

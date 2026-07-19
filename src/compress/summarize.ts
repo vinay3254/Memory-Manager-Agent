@@ -295,6 +295,32 @@ Answer:`;
   }
 
   /**
+   * Explains the semantic path connecting two concepts.
+   */
+  async explainPath(startConcept: string, endConcept: string, pathSteps: string[]): Promise<string> {
+    const prompt = `You are a cognitive path tracer.
+Your task is to explain the narrative link between "${startConcept}" and "${endConcept}" based on the following chain of relationships.
+
+PATH:
+${pathSteps.map((step, i) => `${i + 1}. ${step}`).join("\n")}
+
+Provide a cohesive story or narrative explaining how these two concepts connect. Do not list them step by step; instead, write a clean, flowing prose explanation.`;
+
+    const response = await this.client.messages.create({
+      model: this.model,
+      max_tokens: 512,
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const content = response.content[0];
+    if (content?.type !== "text") {
+      return "Error: Unexpected response type from assistant.";
+    }
+
+    return content.text.trim();
+  }
+
+  /**
    * Explains a concept by analyzing a sub-graph of related memories.
    */
   async explainConcept(concept: string, memories: string[], relationships: string[]): Promise<string> {
