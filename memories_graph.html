@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Memory Relationship Graph</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #0f172a;
+      color: #f8fafc;
+      font-family: 'Inter', -apple-system, sans-serif;
+      overflow: hidden;
+    }
+    #header {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 10;
+      pointer-events: none;
+    }
+    #header h1 {
+      margin: 0 0 5px 0;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      background: linear-gradient(to right, #38bdf8, #818cf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    #header p {
+      margin: 0;
+      font-size: 14px;
+      color: #64748b;
+    }
+    #search-box {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      z-index: 10;
+    }
+    #search-input {
+      padding: 10px 16px;
+      width: 250px;
+      background-color: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      color: #f8fafc;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    #search-input:focus {
+      border-color: #38bdf8;
+    }
+    #info-panel {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      width: 320px;
+      background-color: rgba(30, 41, 59, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(51, 65, 85, 0.5);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+      z-index: 10;
+      transition: opacity 0.3s;
+      opacity: 0;
+      pointer-events: none;
+    }
+    #info-panel.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    #info-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #38bdf8;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+    #info-content {
+      font-size: 15px;
+      line-height: 1.5;
+      color: #e2e8f0;
+      margin-bottom: 15px;
+    }
+    .meta-item {
+      font-size: 13px;
+      color: #94a3b8;
+      margin-bottom: 4px;
+    }
+    .meta-value {
+      color: #f1f5f9;
+      font-weight: 500;
+    }
+    svg {
+      width: 100vw;
+      height: 100vh;
+      cursor: grab;
+    }
+    svg:active {
+      cursor: grabbing;
+    }
+    .node {
+      stroke: #0f172a;
+      stroke-width: 2px;
+      transition: stroke-width 0.2s, r 0.2s;
+    }
+    .node:hover {
+      stroke-width: 3px;
+      cursor: pointer;
+    }
+    .link {
+      stroke: #334155;
+      stroke-opacity: 0.6;
+      stroke-width: 1.5px;
+      fill: none;
+    }
+    .link-label {
+      font-size: 9px;
+      fill: #475569;
+      font-weight: 500;
+      text-anchor: middle;
+      pointer-events: none;
+    }
+    .node-label {
+      font-size: 11px;
+      fill: #94a3b8;
+      pointer-events: none;
+      text-anchor: middle;
+    }
+    /* Node colors by type */
+    .node-fact { fill: #3b82f6; }
+    .node-decision { fill: #10b981; }
+    .node-event { fill: #8b5cf6; }
+    .node-summary { fill: #f59e0b; }
+    
+    .node-highlighted {
+      stroke: #f43f5e !important;
+      stroke-width: 4px !important;
+    }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <h1>Memory Relationship Graph</h1>
+    <p>Interactive representation of stored memories and relationships</p>
+  </div>
+  <div id="search-box">
+    <input type="text" id="search-input" placeholder="Search memories...">
+  </div>
+  <div id="info-panel">
+    <div id="info-title">Memory Details</div>
+    <div id="info-content">Select a node to view its content.</div>
+    <div id="info-meta"></div>
+  </div>
+
+  <svg id="graph-svg"></svg>
+
+  <script>
+    const data = {
+      nodes: [{"id":"4dae86d6-e948-4cdb-b813-0faeb1572439","content":"React components can be declared as functions or classes.","type":"fact","source":"cli","created_at":1784460494071,"last_accessed":1784460494071,"access_count":0,"decay_weight":1,"merged_from":[],"tags":[],"importance":5,"access_history":[{"timestamp":1784460494074,"action":"created"}]},{"id":"cb3d2f1f-5fa8-4c6a-baba-561dcd4f1d91","content":"The project frontend is built using React and TypeScript, chosen for React's virtual DOM rendering capabilities.","type":"summary","source":"merged:cli","created_at":1784460484287,"last_accessed":1784460484287,"access_count":0,"decay_weight":1,"merged_from":["4531afb7-3db5-4a35-bd41-366f666769ad"],"tags":[],"importance":5,"access_history":[{"timestamp":1784460484309,"action":"created"}]},{"id":"41a1c29d-c312-4393-879d-caeb8827dc55","content":"TypeScript adds static typing to JavaScript, which is employed in the user interface to implement strict static typing.","type":"summary","source":"merged:cli","created_at":1784460463880,"last_accessed":1784460463880,"access_count":11,"decay_weight":0.9389198780625001,"merged_from":["eba2d31f-788d-46e9-bfce-160eb74a6794"],"tags":["typescript","js"],"importance":5,"access_history":[{"timestamp":1784460463923,"action":"created"}]},{"id":"5838d4e0-91ae-41af-954c-7222a7c4134a","content":"This memory is temporary and should be archived","type":"fact","source":"cli","created_at":1784460315026,"last_accessed":1784460329181,"access_count":0,"decay_weight":1,"merged_from":[],"tags":["test-archive"],"expires_at":1784460316802,"importance":5,"access_history":[{"timestamp":1784460315029,"action":"created"},{"timestamp":1784460321499,"action":"archived"},{"timestamp":1784460329181,"action":"restored"}],"archived":false},{"id":"53907737-77ca-4b9c-980f-6abf2eb1abbf","content":"The provided facts span multiple domains: photosynthesis describes the biological process plants use to convert light energy into chemical energy; Mount Everest is recognized as the world's highest mountain; Paris serves as the capital of France; and Antigravity is a development tool created by Google DeepMind that accelerates coding workflows through support for advanced agentic coding techniques. These facts do not meaningfully overlap or consolidate into a unified summary, as they address disparate subjects in biology, geography, and software development.","type":"summary","source":"consolidation","created_at":1784460151379,"last_accessed":1784460151379,"access_count":1,"decay_weight":0.95,"merged_from":["e9e788f2-c0c8-4abc-93ad-ea6fcd8b8d6b","640dc332-e879-49e7-be2e-2c029f171f0f","83f26e39-b519-4fd4-9693-288dd4148a96","175f65cf-2bbb-4b3f-bbd7-4932780ac30c"],"tags":["test-consolidation"],"importance":5,"access_history":[{"timestamp":1784460151379,"action":"created"}]},{"id":"e9e788f2-c0c8-4abc-93ad-ea6fcd8b8d6b","content":"Photosynthesis is the process used by plants to convert light energy into chemical energy.","type":"fact","source":"cli","created_at":1784460142638,"last_accessed":1784460142638,"access_count":0,"decay_weight":0.95,"merged_from":[],"tags":["test-consolidation"],"importance":5,"access_history":[{"timestamp":1784460142641,"action":"created"},{"timestamp":1784460151638,"action":"archived"}],"archived":true},{"id":"640dc332-e879-49e7-be2e-2c029f171f0f","content":"Mount Everest is the highest mountain in the world.","type":"fact","source":"cli","created_at":1784460141337,"last_accessed":1784460141337,"access_count":0,"decay_weight":0.95,"merged_from":[],"tags":["test-consolidation"],"importance":5,"access_history":[{"timestamp":1784460141340,"action":"created"},{"timestamp":1784460151639,"action":"archived"}],"archived":true},{"id":"83f26e39-b519-4fd4-9693-288dd4148a96","content":"The capital of France is Paris.","type":"fact","source":"cli","created_at":1784460140102,"last_accessed":1784460140102,"access_count":0,"decay_weight":0.95,"merged_from":[],"tags":["test-consolidation"],"importance":5,"access_history":[{"timestamp":1784460140105,"action":"created"},{"timestamp":1784460151640,"action":"archived"}],"archived":true},{"id":"175f65cf-2bbb-4b3f-bbd7-4932780ac30c","content":"Antigravity is a tool designed by Google DeepMind that helps developers write code faster and supports advanced agentic coding techniques.","type":"summary","source":"merged:cli","created_at":1784460131697,"last_accessed":1784460131697,"access_count":0,"decay_weight":0.95,"merged_from":["9af3c0bb-b229-442c-9120-e80b17cde2c2","ce7610bb-33be-4831-9c18-2d2e407175e9"],"tags":["test-consolidation"],"importance":5,"access_history":[{"timestamp":1784460131737,"action":"created"},{"timestamp":1784460151641,"action":"archived"}],"archived":true},{"id":"039fe018-a5f4-4e33-8b33-57d8333ff0b3","content":"This is extremely critical secret data for deployment","type":"fact","source":"cli","created_at":1783961697341,"last_accessed":1783961997694,"access_count":3,"decay_weight":1,"merged_from":[],"tags":["test-decay"],"importance":10,"access_history":[{"timestamp":1783961697344,"action":"created"},{"timestamp":1783961844646,"action":"updated"},{"timestamp":1783961851326,"action":"updated"},{"timestamp":1783961923824,"action":"retrieved"},{"timestamp":1783961934132,"action":"retrieved"},{"timestamp":1783961997694,"action":"retrieved"}]},{"id":"bd8611de-5e9e-44ae-9dae-ea7f9def1b26","content":"This is low importance information","type":"fact","source":"cli","created_at":1783961688996,"last_accessed":1783961997694,"access_count":3,"decay_weight":0.8943935000000001,"merged_from":[],"tags":["test-decay"],"importance":1,"access_history":[{"timestamp":1783961688999,"action":"created"},{"timestamp":1783961844724,"action":"updated"},{"timestamp":1783961851404,"action":"updated"},{"timestamp":1783961923823,"action":"retrieved"},{"timestamp":1783961934132,"action":"retrieved"},{"timestamp":1783961997694,"action":"retrieved"}]},{"id":"b53ae93c-1468-4505-89e8-e461d4d2de2c","content":"Decided to use Qdrant for vector retrieval","type":"decision","source":"cli","created_at":1783961328920,"last_accessed":1783961997692,"access_count":5,"decay_weight":0.9418537499999999,"merged_from":[],"tags":["db"],"access_history":[{"timestamp":1783961566561,"action":"retrieved"},{"timestamp":1783961844769,"action":"updated"},{"timestamp":1783961851452,"action":"updated"},{"timestamp":1783961923823,"action":"retrieved"},{"timestamp":1783961934132,"action":"retrieved"},{"timestamp":1783961997692,"action":"retrieved"},{"timestamp":1783961997693,"action":"spreading-activation"}],"importance":5},{"id":"5f2a0ec2-6702-43f9-9080-fe12fe814e1b","content":"Decided to use ChromaDB for vector retrieval","type":"decision","source":"cli","created_at":1783008592956,"last_accessed":1783961997693,"access_count":11,"decay_weight":0.94002789025625,"merged_from":[],"tags":["chromadb","db"],"access_history":[{"timestamp":1783961566562,"action":"retrieved"},{"timestamp":1783961844812,"action":"updated"},{"timestamp":1783961851499,"action":"updated"},{"timestamp":1783961923822,"action":"retrieved"},{"timestamp":1783961934131,"action":"retrieved"},{"timestamp":1783961997692,"action":"spreading-activation"},{"timestamp":1783961997693,"action":"retrieved"},{"timestamp":1783961997695,"action":"spreading-activation"}],"importance":5}],
+      links: [{"source":"b53ae93c-1468-4505-89e8-e461d4d2de2c","target":"5f2a0ec2-6702-43f9-9080-fe12fe814e1b","relation":"contradicts"},{"source":"53907737-77ca-4b9c-980f-6abf2eb1abbf","target":"e9e788f2-c0c8-4abc-93ad-ea6fcd8b8d6b","relation":"consolidates"},{"source":"53907737-77ca-4b9c-980f-6abf2eb1abbf","target":"640dc332-e879-49e7-be2e-2c029f171f0f","relation":"consolidates"},{"source":"53907737-77ca-4b9c-980f-6abf2eb1abbf","target":"83f26e39-b519-4fd4-9693-288dd4148a96","relation":"consolidates"},{"source":"53907737-77ca-4b9c-980f-6abf2eb1abbf","target":"175f65cf-2bbb-4b3f-bbd7-4932780ac30c","relation":"consolidates"},{"source":"4dae86d6-e948-4cdb-b813-0faeb1572439","target":"cb3d2f1f-5fa8-4c6a-baba-561dcd4f1d91","relation":"related_to"},{"source":"cb3d2f1f-5fa8-4c6a-baba-561dcd4f1d91","target":"41a1c29d-c312-4393-879d-caeb8827dc55","relation":"part_of"}]
+    };
+
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    const svg = d3.select("#graph-svg")
+      .attr("viewBox", [0, 0, width, height]);
+
+    const g = svg.append("g");
+
+    // Add zoom behavior
+    svg.call(d3.zoom()
+      .extent([[0, 0], [width, height]])
+      .scaleExtent([0.1, 8])
+      .on("zoom", ({transform}) => {
+        g.attr("transform", transform);
+      }));
+
+    // Setup simulation
+    const simulation = d3.forceSimulation(data.nodes)
+      .force("link", d3.forceLink(data.links).id(d => d.id).distance(120))
+      .force("charge", d3.forceManyBody().strength(-300))
+      .force("center", d3.forceCenter(width / 2, height / 2))
+      .force("collision", d3.forceCollide().radius(40));
+
+    // Arrow markers
+    svg.append("defs").append("marker")
+      .attr("id", "arrow")
+      .attr("viewBox", "0 -5 10 10")
+      .attr("refX", 25)
+      .attr("refY", 0)
+      .attr("markerWidth", 6)
+      .attr("markerHeight", 6)
+      .attr("orient", "auto")
+      .append("path")
+      .attr("d", "M0,-5L10,0L0,5")
+      .attr("fill", "#334155");
+
+    // Draw links
+    const link = g.append("g")
+      .selectAll("path")
+      .data(data.links)
+      .join("path")
+      .attr("class", "link")
+      .attr("marker-end", "url(#arrow)");
+
+    // Draw link labels
+    const linkLabel = g.append("g")
+      .selectAll("text")
+      .data(data.links)
+      .join("text")
+      .attr("class", "link-label")
+      .text(d => d.relation.toUpperCase());
+
+    // Draw nodes
+    const node = g.append("g")
+      .selectAll("circle")
+      .data(data.nodes)
+      .join("circle")
+      .attr("r", d => d.type === "summary" ? 14 : 10)
+      .attr("class", d => `node node-${d.type}`)
+      .call(drag(simulation));
+
+    // Draw labels
+    const label = g.append("g")
+      .selectAll("text")
+      .data(data.nodes)
+      .join("text")
+      .attr("class", "node-label")
+      .attr("dy", d => d.type === "summary" ? 24 : 20)
+      .text(d => d.content.length > 25 ? d.content.slice(0, 25) + "..." : d.content);
+
+    // Click behavior
+    node.on("click", (event, d) => {
+      const panel = d3.select("#info-panel");
+      d3.select("#info-title").text(d.type.toUpperCase());
+      d3.select("#info-content").text(d.content);
+      
+      const metaHtml = `
+        <div class="meta-item">Importance: <span class="meta-value">${d.importance || 5}/10</span></div>
+        <div class="meta-item">Access Count: <span class="meta-value">${d.access_count}</span></div>
+        <div class="meta-item">Decay Weight: <span class="meta-value">${(d.decay_weight * 100).toFixed(0)}%</span></div>
+        <div class="meta-item">Source: <span class="meta-value">${d.source}</span></div>
+        <div class="meta-item">Created: <span class="meta-value">${new Date(d.created_at).toLocaleString()}</span></div>
+        ${d.tags && d.tags.length ? `<div class="meta-item">Tags: <span class="meta-value">${d.tags.join(', ')}</span></div>` : ''}
+        ${d.archived ? `<div class="meta-item" style="color:#ef4444;font-weight:bold;">ARCHIVED (SOFT-DELETED)</div>` : ''}
+      `;
+      d3.select("#info-meta").html(metaHtml);
+      panel.classed("visible", true);
+      event.stopPropagation();
+    });
+
+    // Dismiss panel on svg click
+    svg.on("click", () => {
+      d3.select("#info-panel").classed("visible", false);
+    });
+
+    // Search function
+    d3.select("#search-input").on("input", function() {
+      const q = this.value.toLowerCase().trim();
+      if (!q) {
+        node.classed("node-highlighted", false);
+        return;
+      }
+      node.classed("node-highlighted", d => d.content.toLowerCase().includes(q));
+    });
+
+    simulation.on("tick", () => {
+      link.attr("d", d => {
+        return `M${d.source.x},${d.source.y} L${d.target.x},${d.target.y}`;
+      });
+
+      linkLabel
+        .attr("x", d => (d.source.x + d.target.x) / 2)
+        .attr("y", d => (d.source.y + d.target.y) / 2 - 4);
+
+      node
+        .attr("cx", d => d.x)
+        .attr("cy", d => d.y);
+
+      label
+        .attr("x", d => d.x)
+        .attr("y", d => d.y);
+    });
+
+    function drag(simulation) {
+      function dragstarted(event, d) {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        d.fx = d.x;
+        d.fy = d.y;
+      }
+      
+      function dragged(event, d) {
+        d.fx = event.x;
+        d.fy = event.y;
+      }
+      
+      function dragended(event, d) {
+        if (!event.active) simulation.alphaTarget(0);
+        d.fx = null;
+        d.fy = null;
+      }
+      
+      return d3.drag()
+        .on("start", dragstarted)
+        .on("drag", dragged)
+        .on("end", dragended);
+    }
+  </script>
+</body>
+</html>
