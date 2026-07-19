@@ -36,6 +36,7 @@ import {
 } from "../store/backup.js";
 import { parseTTL } from "../utils/ttl.js";
 import { getConfigStore } from "../store/config.js";
+import { exportVisualizerHTML } from "../store/visualize.js";
 import { consolidateMemories } from "../compress/consolidate.js";
 import { findAndExplainPath } from "../retrieve/path.js";
 import { explainConcept } from "../retrieve/explain.js";
@@ -758,6 +759,19 @@ async function cmdArchiveRestore(args: ParsedArgs): Promise<void> {
   console.log(colorize(`\n✅ Memory successfully restored from archive: "${mem.content}"\n`, "green"));
 }
 
+async function cmdVisualize(args: ParsedArgs): Promise<void> {
+  const filePath = args.positional[0] ?? "memories_graph.html";
+
+  console.log(colorize(`⏳ Generating interactive visualizer at ${filePath}...`, "dim"));
+  try {
+    exportVisualizerHTML(filePath);
+    console.log(colorize(`\n✅ Graph visualizer successfully exported to ${filePath}!\n`, "green"));
+  } catch (err) {
+    console.error(colorize(`\n❌ Error: ${String(err)}\n`, "red"));
+    process.exit(1);
+  }
+}
+
 async function cmdConsolidate(args: ParsedArgs): Promise<void> {
   const tag = args.positional[0];
 
@@ -839,6 +853,7 @@ function printHelp(): void {
   console.log("  mem consolidate [tag]");
   console.log("  mem explain <concept>");
   console.log("  mem path <startConcept> <endConcept>");
+  console.log("  mem visualize [file_path.html]");
   console.log("  mem archive [list|restore] [memoryId]\n");
 }
 
@@ -908,6 +923,9 @@ async function main(): Promise<void> {
         console.error(colorize(`Error: unknown archive command "${subCommand}". Use "list" or "restore".`, "red"));
         process.exit(1);
       }
+      break;
+    case "visualize":
+      await cmdVisualize(args);
       break;
     case "consolidate":
       await cmdConsolidate(args);
