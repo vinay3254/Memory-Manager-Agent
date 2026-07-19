@@ -37,6 +37,7 @@ import {
 import { parseTTL } from "../utils/ttl.js";
 import { getConfigStore } from "../store/config.js";
 import { consolidateMemories } from "../compress/consolidate.js";
+import { explainConcept } from "../retrieve/explain.js";
 import type { MemoryType } from "../types.js";
 
 // ---------------------------------------------------------------------------
@@ -740,6 +741,25 @@ async function cmdConsolidate(args: ParsedArgs): Promise<void> {
   }
 }
 
+async function cmdExplain(args: ParsedArgs): Promise<void> {
+  const concept = args.positional[0];
+  if (!concept) {
+    console.error(colorize("Error: provide a concept to explain. e.g. mem explain \"typescript\"", "red"));
+    process.exit(1);
+  }
+
+  console.log(colorize(`⏳ Generating conceptual explanation for: "${concept}"...\n`, "dim"));
+  try {
+    const explanation = await explainConcept(concept);
+    console.log(colorize("📚 Explanation:\n", "bold"));
+    console.log(explanation);
+    console.log();
+  } catch (err) {
+    console.error(colorize(`\n❌ Error: ${String(err)}\n`, "red"));
+    process.exit(1);
+  }
+}
+
 function printHelp(): void {
   console.log(colorize("\nUsage:", "bold"));
   console.log("  mem add <content> [--type fact|decision|event|summary]");
@@ -759,7 +779,8 @@ function printHelp(): void {
   console.log("  mem tag <tag_name> <search_query>");
   console.log("  mem untag <tag_name> <search_query>");
   console.log("  mem config [get|set] [key] [value]");
-  console.log("  mem consolidate [tag]\n");
+  console.log("  mem consolidate [tag]");
+  console.log("  mem explain <concept>\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -819,6 +840,9 @@ async function main(): Promise<void> {
       break;
     case "consolidate":
       await cmdConsolidate(args);
+      break;
+    case "explain":
+      await cmdExplain(args);
       break;
     default:
       if (args.command) {

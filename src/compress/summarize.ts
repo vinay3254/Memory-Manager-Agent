@@ -252,6 +252,36 @@ Answer:`;
 
     return content.text.trim();
   }
+
+  /**
+   * Explains a concept by analyzing a sub-graph of related memories.
+   */
+  async explainConcept(concept: string, memories: string[], relationships: string[]): Promise<string> {
+    const prompt = `You are a knowledge synthesis engine.
+Your task is to explain the concept "${concept}" based on the following memories and their relationships.
+Organize the explanation hierarchically and clearly. Describe how the different memories fit together using the relationships.
+
+MEMORIES:
+${memories.map((m, i) => `- [Memory ${i + 1}] ${m}`).join("\n")}
+
+RELATIONSHIPS:
+${relationships.map(r => `- ${r}`).join("\n")}
+
+Provide a clear, cohesive explanation of "${concept}". Do not refer to "Memory 1" or "Memory 2" by their numbers in your explanation. Use their actual concepts instead.`;
+
+    const response = await this.client.messages.create({
+      model: this.model,
+      max_tokens: 1024,
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const content = response.content[0];
+    if (content?.type !== "text") {
+      return "Error: Unexpected response type from assistant.";
+    }
+
+    return content.text.trim();
+  }
 }
 
 // ---------------------------------------------------------------------------
