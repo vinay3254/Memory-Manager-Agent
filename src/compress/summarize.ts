@@ -184,6 +184,47 @@ Output ONLY "CONTRADICTION" if they contradict, or "OK" if they do not. Do not i
   }
 
   /**
+   * Evaluates if there is a relationship between two memories and returns the relation type or null.
+   */
+  async suggestRelation(memA: string, memB: string): Promise<string | null> {
+    const prompt = `You are a memory relationship inference engine.
+Analyze these two memory records and decide if they share a direct conceptual relationship.
+The possible relationship types are:
+- "causes" (one event or decision causes the other)
+- "depends_on" (one fact or decision depends on the other)
+- "contradicts" (they directly conflict or assert opposite statements)
+- "part_of" (one concept is a sub-component or part of the other)
+- "related_to" (they share a strong, direct thematic or conceptual link)
+
+MEMORY A:
+${memA}
+
+MEMORY B:
+${memB}
+
+If there is a clear relationship, output ONLY the relation type (e.g. "causes", "depends_on", "contradicts", "part_of", "related_to").
+If there is no direct relationship, output ONLY "NONE".
+Do not include any explanation or extra text.`;
+
+    const response = await this.client.messages.create({
+      model: this.model,
+      max_tokens: 16,
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const content = response.content[0];
+    if (content?.type !== "text") {
+      return null;
+    }
+
+    const res = content.text.trim().toLowerCase();
+    if (res === "none" || !["causes", "depends_on", "contradicts", "part_of", "related_to"].includes(res)) {
+      return null;
+    }
+    return res;
+  }
+
+  /**
    * Answers a user's question using retrieved memories as context.
    */
   async answerQuestion(question: string, contextMemories: string[]): Promise<string> {
