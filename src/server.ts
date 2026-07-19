@@ -29,6 +29,7 @@ import { v4 as uuidv4 } from "uuid";
 import { exportBackup, importBackup } from "./store/backup.js";
 import { parseTTL } from "./utils/ttl.js";
 import { consolidateMemories } from "./compress/consolidate.js";
+import { findAndExplainPath } from "./retrieve/path.js";
 import type { MemoryType, MemoryLink, LinkedMemory } from "./types.js";
 
 // ---------------------------------------------------------------------------
@@ -583,6 +584,32 @@ server.tool(
           type: "text",
           text: `Consolidated ${stats.consolidatedCount} memories into new summary memory [${stats.newSummaryId}].\nSummary content: "${stats.summaryText}"`
         }],
+      };
+    } catch (err) {
+      return {
+        content: [{ type: "text", text: `Error: ${String(err)}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Tool: memory_find_path
+// ---------------------------------------------------------------------------
+
+server.tool(
+  "memory_find_path",
+  "Traces and explains the relationship path connecting two distinct concepts in the memory graph.",
+  {
+    startConcept: z.string().describe("The starting concept"),
+    endConcept: z.string().describe("The destination concept"),
+  },
+  async ({ startConcept, endConcept }) => {
+    try {
+      const result = await findAndExplainPath(startConcept, endConcept);
+      return {
+        content: [{ type: "text", text: result }],
       };
     } catch (err) {
       return {

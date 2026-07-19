@@ -362,6 +362,56 @@ export class MetadataStore {
     return this.links.map(l => ({ ...l }));
   }
 
+  findShortestPath(startId: string, endId: string): MemoryLink[] | null {
+    if (startId === endId) return [];
+
+    const visited = new Set<string>();
+    const parentMap = new Map<string, { parentId: string; link: MemoryLink }>();
+    const queue: string[] = [startId];
+    visited.add(startId);
+
+    let found = false;
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      if (current === endId) {
+        found = true;
+        break;
+      }
+
+      for (const link of this.links) {
+        if (link.sourceId === current) {
+          const next = link.targetId;
+          if (!visited.has(next)) {
+            visited.add(next);
+            parentMap.set(next, { parentId: current, link });
+            queue.push(next);
+          }
+        } else if (link.targetId === current) {
+          const next = link.sourceId;
+          if (!visited.has(next)) {
+            visited.add(next);
+            parentMap.set(next, { parentId: current, link });
+            queue.push(next);
+          }
+        }
+      }
+    }
+
+    if (!found) return null;
+
+    const path: MemoryLink[] = [];
+    let curr = endId;
+    while (curr !== startId) {
+      const step = parentMap.get(curr);
+      if (!step) break;
+      path.unshift(step.link);
+      curr = step.parentId;
+    }
+
+    return path;
+  }
+
   importLinks(links: MemoryLink[]): void {
     for (const link of links) {
       const exists = this.links.some(
