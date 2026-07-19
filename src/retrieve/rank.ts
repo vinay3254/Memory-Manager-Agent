@@ -60,7 +60,7 @@ export class Retriever {
 
     // Step 3: Fetch metadata for all candidates
     const ids = vectorResults.map((r) => r.id);
-    const metaRecords = metaStore.getByIds(ids);
+    const metaRecords = metaStore.getByIds(ids, filters?.includeArchived);
 
     // Build a lookup map: id → { meta, similarity }
     const metaMap = new Map<string, Omit<MemoryRecord, "embedding">>();
