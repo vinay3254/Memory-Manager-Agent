@@ -114,6 +114,35 @@ export class MetadataStore {
     this.save();
   }
 
+  archive(id: string): void {
+    const mem = this.memories.get(id);
+    if (mem) {
+      mem.archived = true;
+      if (!mem.access_history) mem.access_history = [];
+      mem.access_history.push({ timestamp: Date.now(), action: "archived" });
+      this.save();
+    }
+  }
+
+  restore(id: string): void {
+    const mem = this.memories.get(id);
+    if (mem) {
+      mem.archived = false;
+      mem.decay_weight = 1.0;
+      mem.last_accessed = Date.now();
+      if (!mem.access_history) mem.access_history = [];
+      mem.access_history.push({ timestamp: Date.now(), action: "restored" });
+      this.save();
+    }
+  }
+
+  getArchived(): Omit<MemoryRecord, "embedding">[] {
+    return Array.from(this.memories.values())
+      .filter(m => !!m.archived)
+      .map(m => ({ ...m }))
+      .sort((a, b) => b.created_at - a.created_at);
+  }
+
   // -------------------------------------------------------------------------
   // Reads
   // -------------------------------------------------------------------------
@@ -123,17 +152,18 @@ export class MetadataStore {
     return mem ? { ...mem } : null;
   }
 
-  getByIds(ids: string[]): Omit<MemoryRecord, "embedding">[] {
+  getByIds(ids: string[], includeArchived = false): Omit<MemoryRecord, "embedding">[] {
     const results: Omit<MemoryRecord, "embedding">[] = [];
     for (const id of ids) {
       const mem = this.memories.get(id);
-      if (mem) results.push({ ...mem });
+      if (mem && (includeArchived || !mem.archived)) results.push({ ...mem });
     }
     return results;
   }
 
-  getAll(): Omit<MemoryRecord, "embedding">[] {
+  getAll(includeArchived = false): Omit<MemoryRecord, "embedding">[] {
     return Array.from(this.memories.values())
+      .filter(m => includeArchived || !m.archived)
       .map(m => ({ ...m }))
       .sort((a, b) => b.created_at - a.created_at);
   }
@@ -145,13 +175,14 @@ export class MetadataStore {
   ): Omit<MemoryRecord, "embedding">[] {
     const cutoff = Date.now() - ageDays * 24 * 60 * 60 * 1000;
     return Array.from(this.memories.values())
-      .filter(m => m.decay_weight < decayThreshold && m.created_at < cutoff)
+      .filter(m => !m.archived && m.decay_weight < decayThreshold && m.created_at < cutoff)
       .map(m => ({ ...m }));
   }
 
   /** Returns the N most recent memories (for recurrence calculation) */
   getRecent(limit: number): Omit<MemoryRecord, "embedding">[] {
     return Array.from(this.memories.values())
+      .filter(m => !m.archived)
       .map(m => ({ ...m }))
       .sort((a, b) => b.last_accessed - a.last_accessed)
       .slice(0, limit);
