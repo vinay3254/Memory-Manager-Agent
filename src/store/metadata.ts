@@ -362,6 +362,51 @@ export class MetadataStore {
     return this.links.map(l => ({ ...l }));
   }
 
+  getSubGraph(seedIds: string[], maxDepth = 2): { nodes: Omit<MemoryRecord, "embedding">[], links: MemoryLink[] } {
+    const visited = new Set<string>();
+    const queue: { id: string; depth: number }[] = seedIds.map(id => ({ id, depth: 0 }));
+    const nodes: Omit<MemoryRecord, "embedding">[] = [];
+    const linkSet = new Set<string>();
+    const resultLinks: MemoryLink[] = [];
+
+    while (queue.length > 0) {
+      const { id, depth } = queue.shift()!;
+      if (visited.has(id)) continue;
+      visited.add(id);
+
+      const mem = this.memories.get(id);
+      if (!mem) continue;
+
+      nodes.push({ ...mem });
+
+      if (depth < maxDepth) {
+        for (const link of this.links) {
+          if (link.sourceId === id) {
+            const linkKey = `${link.sourceId}->${link.targetId}:${link.relation}`;
+            if (!linkSet.has(linkKey)) {
+              linkSet.add(linkKey);
+              resultLinks.push({ ...link });
+            }
+            if (!visited.has(link.targetId)) {
+              queue.push({ id: link.targetId, depth: depth + 1 });
+            }
+          } else if (link.targetId === id) {
+            const linkKey = `${link.sourceId}->${link.targetId}:${link.relation}`;
+            if (!linkSet.has(linkKey)) {
+              linkSet.add(linkKey);
+              resultLinks.push({ ...link });
+            }
+            if (!visited.has(link.sourceId)) {
+              queue.push({ id: link.sourceId, depth: depth + 1 });
+            }
+          }
+        }
+      }
+    }
+
+    return { nodes, links: resultLinks };
+  }
+
   importLinks(links: MemoryLink[]): void {
     for (const link of links) {
       const exists = this.links.some(
