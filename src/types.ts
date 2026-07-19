@@ -52,6 +52,9 @@ export interface MemoryRecord {
 
   /** User or agent designated importance rating (1-10), default 5 */
   importance?: number;
+
+  /** Whether the memory is soft-deleted/archived */
+  archived?: boolean;
 }
 
 /** Semantic types a memory can hold */
