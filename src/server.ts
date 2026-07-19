@@ -28,6 +28,7 @@ import { embed } from "./embedding/embed.js";
 import { v4 as uuidv4 } from "uuid";
 import { exportBackup, importBackup } from "./store/backup.js";
 import { parseTTL } from "./utils/ttl.js";
+import { autoLinkMemories } from "./store/autolink.js";
 import { consolidateMemories } from "./compress/consolidate.js";
 import { explainConcept } from "./retrieve/explain.js";
 import type { MemoryType, MemoryLink, LinkedMemory } from "./types.js";
@@ -551,6 +552,32 @@ server.tool(
 
       return {
         content: [{ type: "text", text: `Successfully ${action === "add" ? "added" : "removed"} tag '#${tag}' ${action === "add" ? "to" : "from"} ${count} memories.` }],
+      };
+    } catch (err) {
+      return {
+        content: [{ type: "text", text: `Error: ${String(err)}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Tool: memory_autolink
+// ---------------------------------------------------------------------------
+
+server.tool(
+  "memory_autolink",
+  "Scan the active memories, discover related conceptual matches, and create links automatically using Claude.",
+  {},
+  async () => {
+    try {
+      const stats = await autoLinkMemories();
+      return {
+        content: [{
+          type: "text",
+          text: `Auto-linker run complete. Created ${stats.linksCreated} new semantic links.\n\nDetails:\n${stats.details.join("\n")}`
+        }],
       };
     } catch (err) {
       return {

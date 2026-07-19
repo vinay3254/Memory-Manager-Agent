@@ -36,6 +36,7 @@ import {
 } from "../store/backup.js";
 import { parseTTL } from "../utils/ttl.js";
 import { getConfigStore } from "../store/config.js";
+import { autoLinkMemories } from "../store/autolink.js";
 import { consolidateMemories } from "../compress/consolidate.js";
 import { explainConcept } from "../retrieve/explain.js";
 import type { MemoryType } from "../types.js";
@@ -721,6 +722,26 @@ async function cmdConfig(args: ParsedArgs): Promise<void> {
   process.exit(1);
 }
 
+async function cmdAutolink(): Promise<void> {
+  console.log(colorize("⏳ Sweeping database for auto-linking matches...", "dim"));
+  try {
+    const stats = await autoLinkMemories();
+    if (stats.linksCreated === 0) {
+      console.log(colorize("\nℹ️  No new conceptual relationships discovered.\n", "yellow"));
+      return;
+    }
+
+    console.log(colorize(`\n🔗 Successfully created ${stats.linksCreated} new semantic links:\n`, "green"));
+    for (const detail of stats.details) {
+      console.log(`  ${detail}`);
+    }
+    console.log();
+  } catch (err) {
+    console.error(colorize(`\n❌ Error: ${String(err)}\n`, "red"));
+    process.exit(1);
+  }
+}
+
 async function cmdConsolidate(args: ParsedArgs): Promise<void> {
   const tag = args.positional[0];
 
@@ -780,7 +801,8 @@ function printHelp(): void {
   console.log("  mem untag <tag_name> <search_query>");
   console.log("  mem config [get|set] [key] [value]");
   console.log("  mem consolidate [tag]");
-  console.log("  mem explain <concept>\n");
+  console.log("  mem explain <concept>");
+  console.log("  mem autolink\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -837,6 +859,9 @@ async function main(): Promise<void> {
       break;
     case "config":
       await cmdConfig(args);
+      break;
+    case "autolink":
+      await cmdAutolink();
       break;
     case "consolidate":
       await cmdConsolidate(args);
