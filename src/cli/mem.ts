@@ -36,6 +36,7 @@ import {
 } from "../store/backup.js";
 import { parseTTL } from "../utils/ttl.js";
 import { getConfigStore } from "../store/config.js";
+import { exportVisualizerHTML } from "../store/visualize.js";
 import type { MemoryType } from "../types.js";
 
 // ---------------------------------------------------------------------------
@@ -719,6 +720,19 @@ async function cmdConfig(args: ParsedArgs): Promise<void> {
   process.exit(1);
 }
 
+async function cmdVisualize(args: ParsedArgs): Promise<void> {
+  const filePath = args.positional[0] ?? "memories_graph.html";
+
+  console.log(colorize(`⏳ Generating interactive visualizer at ${filePath}...`, "dim"));
+  try {
+    exportVisualizerHTML(filePath);
+    console.log(colorize(`\n✅ Graph visualizer successfully exported to ${filePath}!\n`, "green"));
+  } catch (err) {
+    console.error(colorize(`\n❌ Error: ${String(err)}\n`, "red"));
+    process.exit(1);
+  }
+}
+
 function printHelp(): void {
   console.log(colorize("\nUsage:", "bold"));
   console.log("  mem add <content> [--type fact|decision|event|summary]");
@@ -737,7 +751,8 @@ function printHelp(): void {
   console.log("  mem history <memoryId>");
   console.log("  mem tag <tag_name> <search_query>");
   console.log("  mem untag <tag_name> <search_query>");
-  console.log("  mem config [get|set] [key] [value]\n");
+  console.log("  mem config [get|set] [key] [value]");
+  console.log("  mem visualize [file_path.html]\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -794,6 +809,9 @@ async function main(): Promise<void> {
       break;
     case "config":
       await cmdConfig(args);
+      break;
+    case "visualize":
+      await cmdVisualize(args);
       break;
     default:
       if (args.command) {
