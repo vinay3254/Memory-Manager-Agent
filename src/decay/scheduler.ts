@@ -41,19 +41,20 @@ export async function runDecayPass(): Promise<DecayRunResult> {
   const vectorStore = getVectorStore();
   const summarizer = getSummarizer();
 
-  // Step 0: Prune expired memories
-  const allMemories = metaStore.getAll();
+  // Step 0: Prune expired memories (archive instead of delete)
+  const allMemories = metaStore.getAll(true);
   const expiredIds: string[] = [];
   const now = Date.now();
   for (const m of allMemories) {
-    if (m.expires_at && now > m.expires_at) {
+    if (m.expires_at && now > m.expires_at && !m.archived) {
       expiredIds.push(m.id);
     }
   }
   if (expiredIds.length > 0) {
-    metaStore.deleteMany(expiredIds);
-    await vectorStore.deleteMany(expiredIds);
-    process.stderr.write(`[Decay] Pruned ${expiredIds.length} expired memories.\n`);
+    for (const id of expiredIds) {
+      metaStore.archive(id);
+    }
+    process.stderr.write(`[Decay] Soft-pruned/archived ${expiredIds.length} expired memories.\n`);
   }
 
   // Step 1: Apply global decay
@@ -125,10 +126,12 @@ export async function runDecayPass(): Promise<DecayRunResult> {
 
     const archiveEmbedding = await embed(archiveContent);
 
-    // Delete old memories
-    const idsToDelete = clusterMemories.map((m) => m.id);
-    metaStore.deleteMany(idsToDelete);
-    await vectorStore.deleteMany(idsToDelete);
+    // Archive old memories
+    const idsToArchive = clusterMemories.map((m) => m.id);
+    for (const id of idsToArchive) {
+      metaStore.archive(id);
+      metaStore.addLink(archiveId, id, "consolidates");
+    }
 
     // Insert archive
     metaStore.insert(archiveRecord);

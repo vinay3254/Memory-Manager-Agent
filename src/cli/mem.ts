@@ -195,13 +195,15 @@ async function cmdSearch(args: ParsedArgs): Promise<void> {
   const types = args.flags["type"]
     ? [args.flags["type"] as MemoryType]
     : undefined;
+  const includeArchived = !!args.flags["archived"] || !!args.flags["include-archived"];
 
   console.log(colorize(`\n🔍 Searching memories for: "${query}"`, "dim"));
   if (tags) console.log(colorize(`   Filter tags: ${tags.join(", ")}`, "gray"));
   if (types) console.log(colorize(`   Filter type: ${types.join(", ")}`, "gray"));
+  if (includeArchived) console.log(colorize(`   Include archived: yes`, "gray"));
 
   const retriever = getRetriever();
-  const result = await retriever.retrieve(query, limit, { tags, types });
+  const result = await retriever.retrieve(query, limit, { tags, types, includeArchived });
 
   if (result.memories.length === 0) {
     console.log(colorize("\n  No memories found.\n", "yellow"));
@@ -719,12 +721,46 @@ async function cmdConfig(args: ParsedArgs): Promise<void> {
   process.exit(1);
 }
 
+async function cmdArchiveList(): Promise<void> {
+  const metaStore = getMetadataStore();
+  const archived = metaStore.getArchived();
+  if (archived.length === 0) {
+    console.log(colorize("\n📁 Archive is empty.\n", "yellow"));
+    return;
+  }
+  console.log(colorize(`\n📁 Archived Memories (${archived.length}):\n`, "bold"));
+  for (const mem of archived) {
+    console.log(`  [${colorize(mem.type.toUpperCase(), "blue")}] ${mem.content} ${colorize(`(${mem.id})`, "gray")}`);
+  }
+  console.log();
+}
+
+async function cmdArchiveRestore(args: ParsedArgs): Promise<void> {
+  const id = args.positional[0];
+  if (!id) {
+    console.error(colorize("Error: provide a memory ID to restore. e.g. mem archive restore <id>", "red"));
+    process.exit(1);
+  }
+  const metaStore = getMetadataStore();
+  const mem = metaStore.getById(id);
+  if (!mem) {
+    console.error(colorize(`Error: memory with ID ${id} not found.`, "red"));
+    process.exit(1);
+  }
+  if (!mem.archived) {
+    console.log(colorize(`\nℹ️  Memory ${id} is not archived.\n`, "yellow"));
+    return;
+  }
+  metaStore.restore(id);
+  console.log(colorize(`\n✅ Memory successfully restored from archive: "${mem.content}"\n`, "green"));
+}
+
 function printHelp(): void {
   console.log(colorize("\nUsage:", "bold"));
   console.log("  mem add <content> [--type fact|decision|event|summary]");
   console.log("                    [--source <name>] [--context <ctx>] [--ttl <duration>] [--importance <1-10>]");
   console.log("                    [--tag <tag>] [--tag <tag>...]");
-  console.log("  mem search <query> [--limit <n>] [--tag <tag>] [--type <type>]");
+  console.log("  mem search <query> [--limit <n>] [--tag <tag>] [--type <type>] [--archived]");
   console.log("  mem stats");
   console.log("  mem tags");
   console.log("  mem decay");
@@ -737,7 +773,8 @@ function printHelp(): void {
   console.log("  mem history <memoryId>");
   console.log("  mem tag <tag_name> <search_query>");
   console.log("  mem untag <tag_name> <search_query>");
-  console.log("  mem config [get|set] [key] [value]\n");
+  console.log("  mem config [get|set] [key] [value]");
+  console.log("  mem archive [list|restore] [memoryId]\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -794,6 +831,18 @@ async function main(): Promise<void> {
       break;
     case "config":
       await cmdConfig(args);
+      break;
+    case "archive":
+      const subCommand = args.positional[0];
+      if (subCommand === "list") {
+        await cmdArchiveList();
+      } else if (subCommand === "restore") {
+        const remainingArgs = { ...args, positional: args.positional.slice(1) };
+        await cmdArchiveRestore(remainingArgs);
+      } else {
+        console.error(colorize(`Error: unknown archive command "${subCommand}". Use "list" or "restore".`, "red"));
+        process.exit(1);
+      }
       break;
     default:
       if (args.command) {
