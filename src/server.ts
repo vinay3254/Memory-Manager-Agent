@@ -30,6 +30,7 @@ import { exportBackup, importBackup } from "./store/backup.js";
 import { parseTTL } from "./utils/ttl.js";
 import { consolidateMemories } from "./compress/consolidate.js";
 import { findAndExplainPath } from "./retrieve/path.js";
+import { explainConcept } from "./retrieve/explain.js";
 import type { MemoryType, MemoryLink, LinkedMemory } from "./types.js";
 
 // ---------------------------------------------------------------------------
@@ -610,6 +611,31 @@ server.tool(
       const result = await findAndExplainPath(startConcept, endConcept);
       return {
         content: [{ type: "text", text: result }],
+      };
+    } catch (err) {
+      return {
+        content: [{ type: "text", text: `Error: ${String(err)}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Tool: memory_explain
+// ---------------------------------------------------------------------------
+
+server.tool(
+  "memory_explain",
+  "Generates a cohesive, structured explanation of a concept by traversing its semantic relationship sub-graph.",
+  {
+    concept: z.string().describe("The concept to explain (e.g. 'typescript', 'database decision')"),
+  },
+  async ({ concept }) => {
+    try {
+      const explanation = await explainConcept(concept);
+      return {
+        content: [{ type: "text", text: explanation }],
       };
     } catch (err) {
       return {
