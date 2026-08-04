@@ -132,6 +132,7 @@ export interface RankedMemory {
 export interface RetrieveFilters {
   tags?: string[];
   types?: MemoryType[];
+  includeArchived?: boolean;
 }
 
 /** Result returned by memory_retrieve MCP tool */
