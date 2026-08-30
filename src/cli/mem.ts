@@ -36,7 +36,11 @@ import {
 } from "../store/backup.js";
 import { parseTTL } from "../utils/ttl.js";
 import { getConfigStore } from "../store/config.js";
+<<<<<<< HEAD
 import { autoLinkMemories } from "../store/autolink.js";
+=======
+import { exportVisualizerHTML } from "../store/visualize.js";
+>>>>>>> main
 import { consolidateMemories } from "../compress/consolidate.js";
 import { findAndExplainPath } from "../retrieve/path.js";
 import { explainConcept } from "../retrieve/explain.js";
@@ -723,6 +727,7 @@ async function cmdConfig(args: ParsedArgs): Promise<void> {
   process.exit(1);
 }
 
+<<<<<<< HEAD
 async function cmdAutolink(): Promise<void> {
   console.log(colorize("⏳ Sweeping database for auto-linking matches...", "dim"));
   try {
@@ -737,6 +742,15 @@ async function cmdAutolink(): Promise<void> {
       console.log(`  ${detail}`);
     }
     console.log();
+=======
+async function cmdVisualize(args: ParsedArgs): Promise<void> {
+  const filePath = args.positional[0] ?? "memories_graph.html";
+
+  console.log(colorize(`⏳ Generating interactive visualizer at ${filePath}...`, "dim"));
+  try {
+    exportVisualizerHTML(filePath);
+    console.log(colorize(`\n✅ Graph visualizer successfully exported to ${filePath}!\n`, "green"));
+>>>>>>> main
   } catch (err) {
     console.error(colorize(`\n❌ Error: ${String(err)}\n`, "red"));
     process.exit(1);
@@ -824,7 +838,11 @@ function printHelp(): void {
   console.log("  mem consolidate [tag]");
   console.log("  mem explain <concept>");
   console.log("  mem path <startConcept> <endConcept>");
+<<<<<<< HEAD
   console.log("  mem autolink\n");
+=======
+  console.log("  mem visualize [file_path.html]\n");
+>>>>>>> main
 }
 
 // ---------------------------------------------------------------------------
@@ -882,8 +900,13 @@ async function main(): Promise<void> {
     case "config":
       await cmdConfig(args);
       break;
+<<<<<<< HEAD
     case "autolink":
       await cmdAutolink();
+=======
+    case "visualize":
+      await cmdVisualize(args);
+>>>>>>> main
       break;
     case "consolidate":
       await cmdConsolidate(args);

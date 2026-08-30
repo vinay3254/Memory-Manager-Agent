@@ -8,3 +8,5 @@ data/
 backup.json
 backup.csv
 backup.md
+*.html
+
